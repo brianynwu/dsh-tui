@@ -11,7 +11,7 @@ import {
   Key,
   Spacer,
   Text,
-  TUI,
+  TuiMainScreen,
   ProcessTerminal,
   matchesKey,
   visibleWidth,
@@ -291,7 +291,11 @@ export function createTuiChat(
   const resolved = resolveTuiConfig(config)
   const palette = createPalette(resolved.theme.color)
   const mdTheme = markdownTheme(palette)
-  const ui = new TUI(runtime.terminal, resolved.showHardwareCursor)
+  const ui = new TuiMainScreen(runtime.terminal, resolved.showHardwareCursor)
+  // pi-tui 0.85 flipped the clear-on-shrink default to false (env-var defaults
+  // removed in 0.85.0); restore the prior behavior so shrinking content still
+  // clears stale rows on re-render.
+  ui.setClearOnShrink(true)
   const chat = new Container()
   const todoContainer = new Container()
   const questionContainer = new Container()

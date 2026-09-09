@@ -62,6 +62,26 @@ recorded debt (all interactive-editor only; `src/vendor/editor.ts`, with a vites
 
 `lib/` is unchanged from `16a33a8` (byte-identical); this release adds only the version bump + these notes.
 
+## pi-tui 0.85.1 bump (`v0.1.4-revive.0`)
+
+Bumps the bundled `@earendil-works/pi-tui` devDep `0.80.7 → 0.85.1` (realigning onto the pi 0.85 line). The
+migration surface is two edits, both in `src/index.ts`, proven by `tsc` against the pinned 0.85.1 types:
+
+- **`TUI` → `TuiMainScreen`.** 0.85 made `TUI` an interface (was a concrete class); the instantiable
+  regular-screen renderer is now `TuiMainScreen` (ctor `(terminal, showHardwareCursor?, logDirectory?)`, a
+  superset of the prior 2-arg call). Every method used is preserved on the interface; `type TUI` imports
+  (e.g. `src/chat/resume.ts`) stay valid.
+- **`ui.setClearOnShrink(true)`.** 0.85.0 removed pi-tui's env-var defaults and flipped the `clearOnShrink`
+  default `true → false`; the explicit call preserves the prior transcript shrink-clear behavior.
+
+pi-tui 0.85.1's own deps (`get-east-asian-width` 1.6.0, `marked` 18.0.5) are unchanged from 0.80.7 and are
+already this package's direct deps — no new transitive surface. The **vendored editor stays**: 0.85.1 still
+ships `EditorOptions = {paddingX?, autocompleteMaxVisible?}` with no prompt/frame/`setPrompt`, so there is
+nothing to un-vendor. New `lib/` baseline hash `50ebf2c5…` (bundled pi-tui changed — the byte-identical
+invariant re-anchors here; a fresh `npm ci && npm run build` reproduces it). vitest 10/10. No pi-tui
+capability (alt-screen, ScrollView, mouse, LaTeX, flex layout) is adopted in this release — that is separate
+follow-on work.
+
 ## ~~Verified compatible with current dsh-core `0.1.1-rc.2` (static, 2026-09-08)~~ — SUPERSEDED
 
 This earlier static review was INCOMPLETE and partly WRONG. It checked only the model-controller path and
