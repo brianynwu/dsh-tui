@@ -69,7 +69,11 @@ claimed the "renderer is self-contained … no pi" — but the renderer extends 
 `Editor`, and a full typecheck against `0.1.1-rc.2` found the `commands.execute` skew it missed. The
 rebuildable-compatibility patch above replaces it with a full typecheck + a byte-identical clean-room rebuild.
 
-## Publish / identity (deferred decision)
+## Publish / identity (`v0.1.3-revive.3`)
 
-The npm `name` is still `@dsh-tui/dsh-tui` (upstream). If this fork is published, rescope it to an owned
-scope; foundry can also consume it via a git pin without republishing.
+Rescoped and published to npm as **`@brianynwu/dsh-tui`** (`0.1.3-revive.3`). The upstream name
+`@dsh-tui/dsh-tui` is owned by another maintainer (`thomaslwang` on npm), so it cannot be republished
+there — this line owns its own scope (`@brianynwu`, `publishConfig.access: public`). The `lib/` is
+byte-identical to `v0.1.3-revive.2`; this release changes only the package identity (name + version) and
+these notes. Foundry consumes the fork by git-SHA pin (rebuildable, live-verified) and does not depend on
+the npm publish; the registry copy is for external/registry-based consumers.
