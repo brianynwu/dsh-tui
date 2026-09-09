@@ -45,6 +45,23 @@ compatible with the pinned base. This patch makes the fork rebuild deterministic
   byte-identically.
 - **Render regression tests** (`test/editor.test.ts`).
 
+## Editor-hardening pass (2026-09-09, `v0.1.3-revive.2`)
+
+Fixes the three pre-existing upstream editor defects the rebuildable-compat patch above carried faithfully as
+recorded debt (all interactive-editor only; `src/vendor/editor.ts`, with a vitest regression per defect):
+
+- **D1 — undo now snapshots paste metadata.** The undo stack stores an `UndoSnapshot` (`state` + `pastes` +
+  `pasteCounter`), not bare `EditorState`, so `undo()` no longer restores a `[paste #N ...]` marker whose
+  backing content was dropped (which `getExpandedText()` would then yield as the raw marker).
+- **D2 — `handleBackspace` renumbers paste ids order-independently.** It rebuilds `this.pastes` from a
+  snapshot, then rewrites marker ids in the text as a pure transform — a text-order walk can no longer
+  overwrite a not-yet-read entry when markers appear in non-ascending id order.
+- **D3 — the autocomplete request chain tolerates rejection.** A rejected/aborted provider call is caught at
+  the serialized-chain boundary, so it neither poisons the next request (`await previousTask`) nor escapes as
+  an unhandled rejection.
+
+`lib/` is unchanged from `16a33a8` (byte-identical); this release adds only the version bump + these notes.
+
 ## ~~Verified compatible with current dsh-core `0.1.1-rc.2` (static, 2026-09-08)~~ — SUPERSEDED
 
 This earlier static review was INCOMPLETE and partly WRONG. It checked only the model-controller path and
