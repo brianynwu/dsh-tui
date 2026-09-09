@@ -4,9 +4,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 智能体的交互式终端（TUI）入口——在终端里获得 Claude Code / Codex 同款的对话体验，以树外（out-of-tree）dsh 插件 bundle 的形式安装。基于 [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui) 构建。
 
-它组合在官方 `@deepseek-ai/dsh-base` bundle 之上，与官方 web 界面共享同一套插件生态——shell 与文件系统工具、技能、子代理、工作流、沙箱审批——不 fork、不魔改。
-
-![dsh-tui 会话](docs/tui.png)
+它组合在官方 `@deepseek-ai/dsh-base` bundle 之上，与官方 web 界面共享同一套插件生态——shell 与文件系统工具、技能、子代理、工作流、沙箱审批。dsh 插件生态**不 fork**；唯一 vendored 的代码是终端 `Editor` 组件（见[兼容性](#兼容性)）。
 
 ## 功能
 
@@ -17,22 +15,20 @@
 - 斜杠命令：`/model`（含推理力度选择）、`/resume`、`/compact`、`/details`、`/help`，以及其他插件注册的全部命令
 - 常驻 todo 面板、token 用量与上下文压力状态栏、会话标题
 - 可配置主题；从 `COLORTERM` 自动检测真彩色
+- `/model` 原地切换（改写 selection ref——同一会话继续，不 fork、不 reseed）
 
 ## 安装
 
-需要 Node `^22.19 || >=24` 和 `dsh` CLI（`npm i -g @deepseek-ai/dsh@next`）。
+需要 Node `^22.19 || >=24` 和 `dsh` CLI（`npm i -g @deepseek-ai/dsh`）。
+
+本 fork **从 GitHub 安装**（未发布到 npm 的 `@dsh-tui` scope）。它随包提供预构建的 `lib/`，且没有 `prepare`
+脚本，因此安装直接使用已提交的构建产物——无构建步骤，也不会触发 `allowBuilds` 提示：
 
 ```sh
-dsh plugin --profile tui add @dsh-tui/dsh-tui
+# 用发布 tag（推荐）或精确 commit——两者都不可变
+dsh plugin --profile tui add github:brianynwu/dsh-tui#v0.1.3-revive.1
 dsh --profile tui                                      # 在当前目录开启会话
 dsh --profile tui --resume <session-id>                # 恢复历史会话
-```
-
-想跟踪仓库最新代码而非 npm 发布版，用 `add github:dsh-tui/dsh-tui`。git 安装的插件在安装时通过 `prepare` 脚本构建，pnpm 默认拦截构建脚本：若该 `add` 失败，按它打印的键名在 `~/.dsh/profiles/tui/pnpm-workspace.yaml` 里追加 `allowBuilds` 后重跑——
-
-```yaml
-allowBuilds:
-  "@dsh-tui/dsh-tui": true
 ```
 
 在环境变量（或启动目录 / `$DSH_HOME` 下的 `.env`）里设置 `DEEPSEEK_API_KEY`。
@@ -51,21 +47,35 @@ allowBuilds:
 
 3. **OpenAI 兼容网关**（vLLM、SGLang 等）：在 profile 补丁（`$DSH_HOME/profiles/tui/cordis.patch.yml`）里声明一个 `llm-pi-ai` 路由并把默认模型指过去——参见 dsh 的 providers 指南。
 
+## 兼容性
+
+- **钉在 dsh-core `0.1.1-rc.2`。** `package.json` 的 `overrides` 加上已提交的 `package-lock.json` 把整套
+  `@deepseek-ai/*` base 钉到验证过的精确版本；全新 `npm ci` + `npm run build` 可确定性地（逐字节一致）重建
+  `lib/`。不要升到 dsh-core `0.1.2`——其 `/resume` 持久化 seam 在当前发布线上有 bug。
+- **Vendored `Editor`。** 本 TUI 需要的无边框 prompt-gutter `Editor` 来自一个从未发布的、被 pnpm 打过补丁的
+  `@earendil-works/pi-tui@0.80.7`。它以 `src/vendor/editor.ts` vendored（从本包自己的 MIT bundle 恢复、保持行为
+  一致），因此 fork 只依赖 pi-tui 0.80.7 已发布的原语。完整维护记录见 `FORK.md`——包括三个忠实保留、延后到专门
+  editor 加固轮次处理的上游既有缺陷（paste-undo 元数据、paste-id 重编号、autocomplete 拒绝）。
+- **原地模型切换。** `/model` 改写模型 selection ref（`src/chat/model-command.ts`），切换后同一会话继续——不 fork
+  子会话（与 pi-Ink 社区移植版不同），因而能与 dsh-core / 自动化编排组合。
+
 ## 开发
 
 ```sh
-pnpm install   # 自动应用 pi-tui 补丁（patches/）
-pnpm build     # tsc 类型声明 + tsdown 运行时打包
+npm ci          # 从已提交 lockfile 取精确 base（不要用 --legacy-peer-deps：它会漏掉 peers）
+npm run build   # 清空 lib/，tsc 类型声明 -> lib/types，tsdown 运行时打包 -> lib/
+npm run typecheck
+npm test        # vitest——渲染器回归测试（test/editor.test.ts）
 ```
 
-pi-tui 钉在 0.80.7 并带一个 pnpm 补丁（编辑器提示符前缀能力），构建时打包进 `lib/`，因此仓库之外的安装方永远不会拿到未打补丁的副本。
+构建是确定性的：干净克隆 + `npm ci` + `npm run build` 逐字节重现已提交的 `lib/`。
 
 ## 状态与已知限制
 
-- 基于 pre-release 的 `@deepseek-ai/dsh` rc 线开发，上游稳定前随时可能 breaking；peer 依赖钉在验证过的 rc 版本。
-- 恢复出来的测试套件（`tests/`）先于本次移植，目前尚不可运行。
+- 跟踪 pre-release 的 `@deepseek-ai/dsh` rc 线（钉在 `0.1.1-rc.2`）；上游稳定前会有变动。
 - 真实模型回合需要可达的 DeepSeek 兼容端点；请求之前的一切（组合、渲染、审批、resume）无需 key 即可工作。
+- 已知的 editor 行为债记录在 `FORK.md`（交互式 paste/undo/autocomplete 路径）。
 
 ## 来源与许可
 
-MIT。TUI 实现恢复自 DeepSeek Harness 仓库历史（`packages/ui/tui`，上游于 commit `10bb9cbf4a` 移除），并移植到已发布的 rc API；上游版权声明保留在 [LICENSE](LICENSE) 中。
+MIT。TUI 实现恢复自 DeepSeek Harness 仓库历史（`packages/ui/tui`，上游已移除），并移植到已发布的 rc API；上游版权声明保留在 [LICENSE](LICENSE) 中。本 fork 增加了上述 rebuildable-compatibility 工作；详见 `FORK.md`。
