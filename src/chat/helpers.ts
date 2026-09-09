@@ -11,10 +11,10 @@ import { homedir } from 'node:os'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import {
   CURSOR_MARKER,
-  Editor,
   truncateToWidth,
   visibleWidth,
 } from '@earendil-works/pi-tui'
+import { Editor } from '../vendor/editor.ts'
 import { isCompactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import { isAppendSurfaceEvent, isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'

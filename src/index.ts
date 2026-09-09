@@ -16,10 +16,10 @@ import {
   matchesKey,
   visibleWidth,
   type Component,
-  type EditorTheme,
   type SlashCommand,
   type TerminalColorScheme,
 } from '@earendil-works/pi-tui'
+import type { EditorTheme } from './vendor/editor.ts'
 import { Service, type Context, type Fiber, type FiberState } from '@deepseek-ai/cordis'
 import {
   assembleContextFor,
@@ -1405,7 +1405,7 @@ export function createTuiChat(
   const runCommand = (text: string): void => {
     const controller = new AbortController()
     commandControllers.add(controller)
-    void ctx.commands.execute(agent, text, controller.signal).then(
+    void ctx.commands.execute(agent, text, [], controller.signal).then(
       (execution) => {
         if (disposed) return
         if (execution === undefined) {

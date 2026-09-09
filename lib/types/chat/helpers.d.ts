@@ -5,7 +5,7 @@
  * timing constants. None of these close over channel state.
  * @module @deepseek-ai/dsh-tui/chat/helpers
  */
-import { Editor } from '@earendil-works/pi-tui';
+import { Editor } from '../vendor/editor.ts';
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session';
 /** Editor that shows a placeholder without making it editable content. */
 export declare class HintEditor extends Editor {
