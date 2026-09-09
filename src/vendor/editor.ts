@@ -12,23 +12,22 @@
  *
  * License: MIT (see ../../LICENSE, unchanged).
  *
- * KNOWN PRE-EXISTING ISSUES (carried faithfully from the upstream bundle; NOT
- * introduced by the vendoring — deliberately left as-is to keep this a faithful
- * copy of the live-verified renderer. Fix in a dedicated editor-hardening pass,
- * not a compat patch):
- *   1. Undo does not snapshot paste metadata: `UndoStack`/`pushUndoSnapshot`
- *      capture only lines + cursor, while `setText`/`handleBackspace` mutate
- *      `pastes`/`pasteCounter`. An undo can restore a `[paste #N ...]` marker
- *      whose backing content is gone, so `getExpandedText()` yields the marker.
- *   2. `handleBackspace` renumbers paste IDs by mutating `this.pastes` during a
- *      `lines.map(replace(...))`; out-of-order marker traversal can overwrite a
- *      not-yet-read entry, mis-assigning pasted content.
- *   3. The autocomplete request chain (`startAutocompleteRequest` ->
- *      `await previousTask` -> `runAutocompleteRequest` -> `await getSuggestions`)
- *      has no rejection handling; a rejected/aborted provider call can surface as
- *      an unhandled rejection and poison the serialized chain.
- * These paths are interactive-editor only and off the orchestrator's automated
- * path (routing / in-place model swap / instructions residency).
+ * EDITOR-HARDENING PASS (2026-09-09) — three pre-existing upstream defects that
+ * the initial vendoring carried faithfully are now FIXED here (operator-authorized
+ * hardening pass; all interactive-editor only, off the orchestrator's automated
+ * path — routing / in-place model swap / instructions residency). Regression
+ * tests: `test/editor.test.ts` (D1/D2/D3). Everything else stays byte-faithful.
+ *   1. FIXED — Undo now snapshots paste metadata. The undo stack stores an
+ *      `UndoSnapshot` (`state` + `pastes` + `pasteCounter`), not bare
+ *      `EditorState`, so `undo()` no longer restores a `[paste #N ...]` marker
+ *      whose backing content was dropped.
+ *   2. FIXED — `handleBackspace` renumbers paste IDs by rebuilding `this.pastes`
+ *      from a snapshot, then rewriting marker ids in the text as a pure
+ *      transform. Text-order traversal can no longer overwrite a not-yet-read
+ *      entry when markers appear in non-ascending id order.
+ *   3. FIXED — the autocomplete request chain catches a rejected/aborted provider
+ *      call at the chain boundary, so it neither poisons the serialized chain
+ *      (`await previousTask`) nor escapes as an unhandled rejection.
  */
 
 import {
@@ -293,15 +292,15 @@ class KillRing {
 }
 
 class UndoStack {
-  private stack: EditorState[] = []
+  private stack: UndoSnapshot[] = []
 
-  /** Push a deep clone of the given state onto the stack. */
-  push(state: EditorState): void {
-    this.stack.push(structuredClone(state))
+  /** Push a deep clone of the given snapshot onto the stack (clones the pastes Map too). */
+  push(snapshot: UndoSnapshot): void {
+    this.stack.push(structuredClone(snapshot))
   }
 
   /** Pop and return the most recent snapshot, or undefined if empty. */
-  pop(): EditorState | undefined {
+  pop(): UndoSnapshot | undefined {
     return this.stack.pop()
   }
 
@@ -491,6 +490,19 @@ interface EditorState {
   lines: string[]
   cursorLine: number
   cursorCol: number
+}
+
+/**
+ * A single undo checkpoint. Beyond the text/cursor `state`, it carries the
+ * paste-marker metadata (`pastes` + `pasteCounter`), which lives outside
+ * `EditorState` but is mutated in lockstep with the text — so an undo that
+ * restored only `state` would leave a `[paste #N ...]` marker whose backing
+ * content had been dropped.
+ */
+interface UndoSnapshot {
+  state: EditorState
+  pastes: Map<number, string>
+  pasteCounter: number
 }
 
 interface LayoutLine {
@@ -1343,16 +1355,23 @@ export class Editor implements Component, Focusable {
       const isPastedSegmented = lastGrapheme ? PASTE_MARKER_SINGLE.exec(lastGrapheme.segment) : null
       if (isPastedSegmented) {
         const targetId = Number(isPastedSegmented[1])
-        this.pastes.delete(targetId)
+        // Rebuild the content map from a snapshot so the text-order walk below
+        // cannot overwrite a not-yet-read entry (markers may appear in the text
+        // in non-ascending id order): drop targetId, shift every higher id down.
+        const renumbered = new Map<number, string>()
+        for (const [id, content] of this.pastes) {
+          if (id < targetId) renumbered.set(id, content)
+          else if (id > targetId) renumbered.set(id - 1, content)
+          // id === targetId: dropped (the deleted paste)
+        }
+        this.pastes = renumbered
         this.pasteCounter--
+        // Rewrite marker ids in the text as a pure, order-independent transform.
         this.state.lines = this.state.lines.map(line =>
           line.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
             const x = Number(idGroup)
             if (x <= targetId) return fullMatch
-            const newText = `[paste #${x - 1}${suffixGroup}]`
-            this.pastes.set(x - 1, this.pastes.get(x) ?? newText)
-            this.pastes.delete(x)
-            return newText
+            return `[paste #${x - 1}${suffixGroup ?? ''}]`
           }),
         )
       }
@@ -1892,14 +1911,22 @@ export class Editor implements Component, Focusable {
   }
 
   pushUndoSnapshot(): void {
-    this.undoStack.push(this.state)
+    this.undoStack.push({
+      state: this.state,
+      pastes: this.pastes,
+      pasteCounter: this.pasteCounter,
+    })
   }
 
   undo(): void {
     this.exitHistoryBrowsing()
     const snapshot = this.undoStack.pop()
     if (!snapshot) return
-    Object.assign(this.state, snapshot)
+    Object.assign(this.state, snapshot.state)
+    // The popped snapshot is an owned deep clone; a later pushUndoSnapshot
+    // re-clones, so adopting its Map directly cannot alias a stacked entry.
+    this.pastes = snapshot.pastes
+    this.pasteCounter = snapshot.pasteCounter
     this.lastAction = null
     this.preferredVisualCol = null
     if (this.onChange) this.onChange(this.getText())
@@ -2076,7 +2103,12 @@ export class Editor implements Component, Focusable {
         snapshotCol,
         options,
       )
-    })()
+    })().catch(() => {
+      // A rejected/aborted provider call (the common, expected abort case
+      // included) is swallowed at the chain boundary so it neither poisons the
+      // next request's `await previousTask` nor escapes as an unhandled
+      // rejection. Matches upstream's no-logging posture.
+    })
     await this.autocompleteRequestTask
   }
 

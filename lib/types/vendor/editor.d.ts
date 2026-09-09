@@ -12,23 +12,22 @@
  *
  * License: MIT (see ../../LICENSE, unchanged).
  *
- * KNOWN PRE-EXISTING ISSUES (carried faithfully from the upstream bundle; NOT
- * introduced by the vendoring — deliberately left as-is to keep this a faithful
- * copy of the live-verified renderer. Fix in a dedicated editor-hardening pass,
- * not a compat patch):
- *   1. Undo does not snapshot paste metadata: `UndoStack`/`pushUndoSnapshot`
- *      capture only lines + cursor, while `setText`/`handleBackspace` mutate
- *      `pastes`/`pasteCounter`. An undo can restore a `[paste #N ...]` marker
- *      whose backing content is gone, so `getExpandedText()` yields the marker.
- *   2. `handleBackspace` renumbers paste IDs by mutating `this.pastes` during a
- *      `lines.map(replace(...))`; out-of-order marker traversal can overwrite a
- *      not-yet-read entry, mis-assigning pasted content.
- *   3. The autocomplete request chain (`startAutocompleteRequest` ->
- *      `await previousTask` -> `runAutocompleteRequest` -> `await getSuggestions`)
- *      has no rejection handling; a rejected/aborted provider call can surface as
- *      an unhandled rejection and poison the serialized chain.
- * These paths are interactive-editor only and off the orchestrator's automated
- * path (routing / in-place model swap / instructions residency).
+ * EDITOR-HARDENING PASS (2026-09-09) — three pre-existing upstream defects that
+ * the initial vendoring carried faithfully are now FIXED here (operator-authorized
+ * hardening pass; all interactive-editor only, off the orchestrator's automated
+ * path — routing / in-place model swap / instructions residency). Regression
+ * tests: `test/editor.test.ts` (D1/D2/D3). Everything else stays byte-faithful.
+ *   1. FIXED — Undo now snapshots paste metadata. The undo stack stores an
+ *      `UndoSnapshot` (`state` + `pastes` + `pasteCounter`), not bare
+ *      `EditorState`, so `undo()` no longer restores a `[paste #N ...]` marker
+ *      whose backing content was dropped.
+ *   2. FIXED — `handleBackspace` renumbers paste IDs by rebuilding `this.pastes`
+ *      from a snapshot, then rewriting marker ids in the text as a pure
+ *      transform. Text-order traversal can no longer overwrite a not-yet-read
+ *      entry when markers appear in non-ascending id order.
+ *   3. FIXED — the autocomplete request chain catches a rejected/aborted provider
+ *      call at the chain boundary, so it neither poisons the serialized chain
+ *      (`await previousTask`) nor escapes as an unhandled rejection.
  */
 import { SelectList, getKeybindings } from '@earendil-works/pi-tui';
 import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions, Component, Focusable, SelectListTheme, TUI } from '@earendil-works/pi-tui';
@@ -62,10 +61,10 @@ declare class KillRing {
 }
 declare class UndoStack {
     private stack;
-    /** Push a deep clone of the given state onto the stack. */
-    push(state: EditorState): void;
+    /** Push a deep clone of the given snapshot onto the stack (clones the pastes Map too). */
+    push(snapshot: UndoSnapshot): void;
     /** Pop and return the most recent snapshot, or undefined if empty. */
-    pop(): EditorState | undefined;
+    pop(): UndoSnapshot | undefined;
     /** Remove all snapshots. */
     clear(): void;
     get length(): number;
@@ -112,6 +111,18 @@ interface EditorState {
     lines: string[];
     cursorLine: number;
     cursorCol: number;
+}
+/**
+ * A single undo checkpoint. Beyond the text/cursor `state`, it carries the
+ * paste-marker metadata (`pastes` + `pasteCounter`), which lives outside
+ * `EditorState` but is mutated in lockstep with the text — so an undo that
+ * restored only `state` would leave a `[paste #N ...]` marker whose backing
+ * content had been dropped.
+ */
+interface UndoSnapshot {
+    state: EditorState;
+    pastes: Map<number, string>;
+    pasteCounter: number;
 }
 interface LayoutLine {
     text: string;
