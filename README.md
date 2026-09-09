@@ -1,4 +1,4 @@
-# @dsh-tui/dsh-tui
+# @brianynwu/dsh-tui
 
 English | [中文](README.zh.md)
 
