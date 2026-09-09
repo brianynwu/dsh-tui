@@ -77,10 +77,16 @@ migration surface is two edits, both in `src/index.ts`, proven by `tsc` against 
 pi-tui 0.85.1's own deps (`get-east-asian-width` 1.6.0, `marked` 18.0.5) are unchanged from 0.80.7 and are
 already this package's direct deps — no new transitive surface. The **vendored editor stays**: 0.85.1 still
 ships `EditorOptions = {paddingX?, autocompleteMaxVisible?}` with no prompt/frame/`setPrompt`, so there is
-nothing to un-vendor. New `lib/` baseline hash `50ebf2c5…` (bundled pi-tui changed — the byte-identical
+nothing to un-vendor. New `lib/` baseline hash `83b6a071…` (bundled pi-tui changed — the byte-identical
 invariant re-anchors here; a fresh `npm ci && npm run build` reproduces it). vitest 10/10. No pi-tui
 capability (alt-screen, ScrollView, mouse, LaTeX, flex layout) is adopted in this release — that is separate
 follow-on work.
+
+This release also completes the `@brianynwu` rescope the npm publish (`0.1.3-revive.3`) left half-done: the
+bundle's own `cordis.patch.yml` loader-entry imports (and the `@module` doc comments + README titles) still
+named `@dsh-tui/dsh-tui`, so the cordis loader hit `ERR_MODULE_NOT_FOUND` once a consumer installed the
+renamed package. They now name `@brianynwu/dsh-tui`. (Caught only at attended live-verify — typecheck and
+vitest both passed; the baseline above is the post-fix bundle.)
 
 ## ~~Verified compatible with current dsh-core `0.1.1-rc.2` (static, 2026-09-08)~~ — SUPERSEDED
 
