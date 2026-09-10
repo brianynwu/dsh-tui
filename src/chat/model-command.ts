@@ -57,15 +57,22 @@ export function createModelController(deps: ModelControllerDeps): ModelControlle
   let modelOverlay: TuiOverlaySession | undefined
   let modelCommands = Promise.resolve()
 
-  // A route whose adapter has not registered yet. Loader activation order is
-  // service-driven, so the TUI can mount before a configured adapter plugin
-  // activates; that transient NO_ADAPTER is not an error — the resolution
-  // waits for the next `llm/adapters-updated` commit instead of surfacing it.
-  let awaitingAdapter = false
+  // Whether a resolution has SUCCEEDED for the current target (a window, or an
+  // explicit no-window). Loader activation order is service-driven, so the TUI
+  // can mount before a configured adapter plugin activates: the initial resolve
+  // then rejects NO_ADAPTER and this stays false, so the `llm/adapters-updated`
+  // listener re-tries on every topology commit UNTIL one succeeds. Gating that
+  // retry on this stable flag — not on a transient "awaiting" flag armed only
+  // after the async rejection lands — closes a race where an adapters-updated
+  // event that fired before the flag was armed was dropped, leaving the adapter
+  // registered but the window never resolved (a blank `${context}` for the
+  // session). A hard (non-NO_ADAPTER) error sets it true to stop auto-retry (and
+  // the one notice); a target change re-enters and clears it.
+  let contextResolved = false
 
   const resolveContextWindow = (selected: ModelSelection | undefined): void => {
     contextWindow = undefined
-    awaitingAdapter = false
+    contextResolved = false
     const resolution: Promise<ContextResolution> = selected === undefined
       ? Promise.resolve({ kind: 'resolved', contextWindow: undefined } as const)
       : ctx.llm.resolveModelInfo(selected.provider, selected.model).then(
@@ -76,24 +83,28 @@ export function createModelController(deps: ModelControllerDeps): ModelControlle
     void resolution.then((result) => {
       if (contextResolution !== resolution) return
       if (result.kind === 'error') {
-        if (selected !== undefined && result.error instanceof LlmError && result.error.code === 'NO_ADAPTER') {
-          awaitingAdapter = true
-          return
-        }
+        // NO_ADAPTER is the transient pre-activation case: stay unresolved and
+        // silent so the adapters-updated listener re-tries on the next commit.
+        if (selected !== undefined && result.error instanceof LlmError && result.error.code === 'NO_ADAPTER') return
+        // A hard error is surfaced once; mark resolved so topology churn does
+        // not re-emit it. A later target change re-enters and clears the flag.
+        contextResolved = true
         deps.appendNotice(`Could not resolve model context: ${errorChain(result.error)}`, 'error')
         return
       }
+      contextResolved = true
       contextWindow = result.contextWindow
       deps.requestRender()
     })
   }
-  // The wait cannot go stale against `target.current`: every target change
-  // re-enters resolveContextWindow, which clears it. A commit that still
-  // lacks the route parks the resolution again rather than erroring, so
-  // unrelated topology changes stay silent. The disposer rides the channel's
-  // detachListeners() through detach(), matching the sibling listeners.
+  // Re-resolve on any adapter topology change while the current target's window
+  // is still unresolved — the commit that registers a late adapter is exactly
+  // this event, and a fresh resolveContextWindow supersedes any pending one (the
+  // `contextResolution !== resolution` guard drops the stale `.then`). Idempotent
+  // once resolved. The disposer rides the channel's detachListeners() through
+  // detach(), matching the sibling listeners.
   const disposeAdapterListener = ctx.on('llm/adapters-updated', () => {
-    if (deps.isDisposed() || !awaitingAdapter) return
+    if (deps.isDisposed() || contextResolved || target.current === undefined) return
     resolveContextWindow(target.current)
   })
   resolveContextWindow(target.current)
