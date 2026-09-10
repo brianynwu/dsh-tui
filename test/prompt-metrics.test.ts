@@ -1,10 +1,10 @@
 /**
- * The single status line above the editor shows the worktree branch with the
- * session-level metrics (model, token meter, context%). CWD and Session ID live
- * in the dashboard pane's `meta` column, but the `cwd`/`session` prompt values
- * stay registered so a custom template can still reference them. These tests pin
- * the default left-prompt composition and the `${session}` value's still-supported
- * interpolation; live rendering/placement is covered by
+ * The status line above the editor is EMPTY by default — every metric moved to the
+ * dashboard pane (CWD/Session/Model/Branch in the meta column; tokens/cache/context
+ * and Provider/Cost in their groups). The prompt values stay registered so a custom
+ * template can still reference them. These tests pin the empty default left prompt
+ * and the `${session}` value's still-supported interpolation; live rendering/placement
+ * is covered by
  * attended live-verify, and `${context}`'s population depends on the model's
  * configured contextWindow reaching the llm adapter (set/verified separately).
  */
@@ -20,10 +20,9 @@ function valueNames(template: string): string[] {
 }
 
 describe('default status line composition', () => {
-  it('shows only worktree + model in the left prompt (all pane-duplicated metrics removed)', () => {
-    expect(valueNames(resolveTuiConfig(undefined).theme.leftPrompt)).toEqual([
-      'git/worktree', 'model',
-    ])
+  it('leaves the left prompt EMPTY by default (every metric moved to the dashboard pane)', () => {
+    expect(resolveTuiConfig(undefined).theme.leftPrompt).toBe('')
+    expect(valueNames(resolveTuiConfig(undefined).theme.leftPrompt)).toEqual([])
   })
 
   it('respects a user override through the resolver path (cwd/session still referenceable)', () => {

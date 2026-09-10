@@ -431,21 +431,18 @@ export function createTuiChat(
     || contextValue === undefined || sessionValue === undefined || queuedValue === undefined || symbolValue === undefined || indicatorValue === undefined) {
     throw new Error('TUI prompt built-ins failed to initialize')
   }
-  // Fold the in-fork session metrics (timing / tokens / context) into the
-  // dashboard service. Everything here is already in-process from the session
-  // event stream — no middleware plugin. This never sets the Provider group: it
-  // has no in-fork source and is owned entirely by the out-of-fork provider bridge.
-  // Seed the in-fork `session` group exactly once (CWD + Session ID are static
-  // for the session). Set at the END of updateDashboard so it is first-set AFTER
-  // timing/tokens/context ⇒ its `meta` column renders rightmost. Never restamped
-  // in the tick (the no-restamp lesson). SYNC-BEFORE-ASYNC ORDERING: every group
-  // the fork seeds here is set synchronously during boot; the out-of-fork orproxy
-  // provider/cost bridge only mutates the store on an async setInterval poll tick
-  // (its first tick fires after boot yields to the event loop), so `session` is
-  // always in the store before the bridge's `provider` group is first published —
-  // CWD/Session ID always render above Provider/Cost within the shared `meta`
-  // column, with no cross-producer ordering API.
-  let sessionSeeded = false
+  // Fold the in-fork session metrics into the dashboard service. Everything here is
+  // already in-process from the session event stream — no middleware plugin. This
+  // never sets the Provider/Cost group: those have no in-fork source and are owned
+  // entirely by the out-of-fork orproxy bridge, which stacks them into the SAME
+  // `ctx` column (below the fork's Context fill/used rows).
+  // SYNC-BEFORE-ASYNC ORDERING: the fork sets the `context` (column `ctx`) and
+  // `session` (column `meta`) groups synchronously during boot; the out-of-fork
+  // bridge only mutates the store on an async setInterval poll tick (its first tick
+  // fires after boot yields to the event loop), so the fork's context group is
+  // always in the `ctx` column before the bridge's provider group is first
+  // published — Provider/Cost always render BELOW fill/used, with no cross-producer
+  // ordering API. `meta` (CWD/Session/Model/Branch) renders rightmost.
   const updateDashboard = (): void => {
     const events = agent.session.events
     const at = now()
@@ -479,6 +476,7 @@ export function createTuiChat(
     const contextWindow = modelController.contextWindow()
     const used = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
     dashboardService.setGroup('context', {
+      column: 'ctx',                              // the orproxy bridge stacks Provider/Cost below these rows
       title: 'Context',
       metrics: contextWindow === undefined
         ? [{ label: 'fill', value: undefined }]
@@ -487,17 +485,21 @@ export function createTuiChat(
           { label: 'used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
         ],
     })
-    if (!sessionSeeded) {
-      sessionSeeded = true
-      dashboardService.setGroup('session', {
-        column: 'meta',
-        title: '',
-        metrics: [
-          { label: 'CWD', value: palette.dim(formattedCwd) },
-          { label: 'Session ID', value: palette.dim(displayText(agent.session.id)) },
-        ],
-      })
-    }
+    // The `meta` column: CWD + Session ID (static) plus Model + Branch (moved off
+    // the status line). Set every tick — fork-owned, so re-stamping is safe (the
+    // no-restamp lesson only forbids the tick overwriting the BRIDGE's group) —
+    // so Model reflects a mid-session /model swap. The setGroup key is stable, so
+    // the column keeps its first-set (rightmost) position across ticks.
+    dashboardService.setGroup('session', {
+      column: 'meta',
+      title: '',
+      metrics: [
+        { label: 'CWD', value: palette.dim(formattedCwd) },
+        { label: 'Session ID', value: palette.dim(displayText(agent.session.id)) },
+        { label: 'Model', value: palette.dim(displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current))) },
+        { label: 'Branch', value: branch === undefined ? undefined : palette.dim(displayText(branch)) },
+      ],
+    })
   }
   const updatePromptValues = (): void => {
     const renderTime = now()
