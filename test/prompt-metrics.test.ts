@@ -1,8 +1,10 @@
 /**
- * The single status line above the editor merges the editing context (cwd +
- * worktree) with the session-level metrics (model, token meter, context%, and
- * the session id). These tests pin the default left-prompt composition and the
- * new `${session}` value's interpolation; live rendering/placement is covered by
+ * The single status line above the editor shows the worktree branch with the
+ * session-level metrics (model, token meter, context%). CWD and Session ID live
+ * in the dashboard pane's `meta` column, but the `cwd`/`session` prompt values
+ * stay registered so a custom template can still reference them. These tests pin
+ * the default left-prompt composition and the `${session}` value's still-supported
+ * interpolation; live rendering/placement is covered by
  * attended live-verify, and `${context}`'s population depends on the model's
  * configured contextWindow reaching the llm adapter (set/verified separately).
  */
@@ -18,13 +20,13 @@ function valueNames(template: string): string[] {
 }
 
 describe('default status line composition', () => {
-  it('merges editing context and session-level metrics into the left prompt', () => {
+  it('shows worktree + session-level metrics in the left prompt (cwd/session moved to the pane)', () => {
     expect(valueNames(resolveTuiConfig(undefined).theme.leftPrompt)).toEqual([
-      'cwd', 'git/worktree', 'model', 'token_meter/cache_hit_rate', 'context', 'session',
+      'git/worktree', 'model', 'token_meter/cache_hit_rate', 'context',
     ])
   })
 
-  it('respects a user override through the resolver path', () => {
+  it('respects a user override through the resolver path (cwd/session still referenceable)', () => {
     const custom = '${cwd} ${session}'
     expect(resolveTuiConfig({ theme: { leftPrompt: custom } }).theme.leftPrompt).toBe(custom)
   })

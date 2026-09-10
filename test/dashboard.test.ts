@@ -80,6 +80,47 @@ describe('DashboardPane render', () => {
     for (const line of lines) expect(visibleWidth(line)).toBe(60)
   })
 
+  it('renders a title-less group as rows only (no header line)', () => {
+    const groups: DashboardGroup[] = [{ title: '', metrics: [{ label: 'CWD', value: '~/x' }] }]
+    const pane = new DashboardPane(() => groups, plainPalette)
+    const body = pane.render(60).slice(1, -1).join('\n')
+    expect(body).toContain('CWD ~/x')
+  })
+
+  it('stacks groups sharing a column key into ONE column, in insertion order', () => {
+    // session (in-fork) then provider (bridge) both in the `meta` column: CWD +
+    // Session ID render ABOVE Provider + Cost, as one column.
+    const groups: DashboardGroup[] = [
+      { column: 'meta', title: '', metrics: [{ label: 'CWD', value: '~/w' }, { label: 'Session ID', value: 'abc' }] },
+      { column: 'meta', title: '', metrics: [{ label: 'Provider', value: 'Novita' }, { label: 'Cost', value: '$0.01' }] },
+    ]
+    const pane = new DashboardPane(() => groups, plainPalette)
+    const rows = pane.render(80).slice(1, -1) // drop top/bottom rules
+    // All four metrics appear, each on its own row, in the stacked order.
+    const cwdRow = rows.findIndex(r => r.includes('CWD'))
+    const sessRow = rows.findIndex(r => r.includes('Session ID'))
+    const provRow = rows.findIndex(r => r.includes('Provider'))
+    const costRow = rows.findIndex(r => r.includes('Cost'))
+    expect(cwdRow).toBeGreaterThanOrEqual(0)
+    expect(cwdRow).toBeLessThan(sessRow)
+    expect(sessRow).toBeLessThan(provRow)
+    expect(provRow).toBeLessThan(costRow)
+    // No 'Provider' title header — the value carries the label instead.
+    expect(rows.some(r => /Provider\s+Novita/.test(r))).toBe(true)
+  })
+
+  it('positions a shared column by its first-set group (meta rightmost after timing)', () => {
+    const groups: DashboardGroup[] = [
+      { title: 'Timing', metrics: [{ label: 'wait', value: '0.4s' }] },
+      { column: 'meta', title: '', metrics: [{ label: 'CWD', value: '~/w' }] },
+      { column: 'meta', title: '', metrics: [{ label: 'Provider', value: 'Novita' }] },
+    ]
+    const pane = new DashboardPane(() => groups, plainPalette)
+    const firstBodyRow = pane.render(80)[1]
+    // Timing is the leftmost column; the meta column (CWD…) is to its right.
+    expect(firstBodyRow.indexOf('Timing')).toBeLessThan(firstBodyRow.indexOf('CWD'))
+  })
+
   it('shows an empty-state row when no group is set', () => {
     const pane = new DashboardPane(() => [], plainPalette)
     const lines = pane.render(40)

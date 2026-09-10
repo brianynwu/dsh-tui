@@ -21,6 +21,14 @@ export interface DashboardMetric {
 export interface DashboardGroup {
     readonly title: string;
     readonly metrics: readonly DashboardMetric[];
+    /**
+     * Optional column key. Groups sharing a `column` render STACKED (top to
+     * bottom) in one pane column, in first-set order; a group with no `column` is
+     * its own column (the default). Lets an in-fork group (e.g. session) and an
+     * out-of-fork producer's group (e.g. the orproxy provider/cost bridge) share a
+     * visual column while each stays owned by its own producer.
+     */
+    readonly column?: string;
 }
 /** Removes a change subscription registered with {@link TuiDashboardService.subscribe}. */
 export type TuiDashboardUnsubscribe = () => void;

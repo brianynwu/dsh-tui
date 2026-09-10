@@ -25,10 +25,41 @@ function padVisible(text: string, width: number): string {
   return `${text}${' '.repeat(fill)}`
 }
 
-/** Lay one group out as a fixed-width column of lines: a title over `label value` rows. */
-function groupColumn(group: DashboardGroup, palette: Palette): { lines: string[]; width: number } {
+/** Render one group's lines: a title line (omitted when the title is empty) over `label value` rows. */
+function groupLines(group: DashboardGroup, palette: Palette): string[] {
   const rows = group.metrics.map(m => `${palette.dim(m.label)} ${m.value ?? palette.dim('—')}`)
-  const lines = [palette.bold(palette.accent(group.title)), ...rows]
+  return group.title === '' ? rows : [palette.bold(palette.accent(group.title)), ...rows]
+}
+
+/**
+ * Partition groups into visual columns: groups sharing a `column` key stack into
+ * ONE column, in first-seen order; a group with no `column` is its own column.
+ * First-seen order is preserved for BOTH column position and within-column
+ * stacking (the service store is insertion-ordered), so a producer's column and
+ * row placement stays stable across value churn.
+ */
+function columnsOf(groups: readonly DashboardGroup[]): DashboardGroup[][] {
+  const columns: DashboardGroup[][] = []
+  const byKey = new Map<string, DashboardGroup[]>()
+  for (const group of groups) {
+    if (group.column === undefined) {
+      columns.push([group]) // own column
+      continue
+    }
+    let bucket = byKey.get(group.column)
+    if (bucket === undefined) {
+      bucket = []
+      byKey.set(group.column, bucket)
+      columns.push(bucket) // reserve this column's position at first sight
+    }
+    bucket.push(group)
+  }
+  return columns
+}
+
+/** Lay a column (one or more stacked groups) out as fixed-width lines. */
+function renderColumn(groupList: DashboardGroup[], palette: Palette): { lines: string[]; width: number } {
+  const lines = groupList.flatMap(group => groupLines(group, palette))
   const width = lines.reduce((max, line) => Math.max(max, visibleWidth(line)), 0)
   return { lines: lines.map(line => padVisible(line, width)), width }
 }
@@ -92,7 +123,7 @@ export class DashboardPane implements Component {
       const empty = padVisible(palette.dim('no metrics yet'), innerWidth)
       return [topRule, fit(`${palette.dim('│')} ${empty} ${palette.dim('│')}`), bottomRule]
     }
-    const columns = groups.map(group => groupColumn(group, palette))
+    const columns = columnsOf(groups).map(groupList => renderColumn(groupList, palette))
     const height = columns.reduce((max, col) => Math.max(max, col.lines.length), 0)
     const separator = ` ${palette.dim('│')} `
     const body: string[] = []

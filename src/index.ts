@@ -435,6 +435,17 @@ export function createTuiChat(
   // dashboard service. Everything here is already in-process from the session
   // event stream — no middleware plugin. This never sets the Provider group: it
   // has no in-fork source and is owned entirely by the out-of-fork provider bridge.
+  // Seed the in-fork `session` group exactly once (CWD + Session ID are static
+  // for the session). Set at the END of updateDashboard so it is first-set AFTER
+  // timing/tokens/context ⇒ its `meta` column renders rightmost. Never restamped
+  // in the tick (the no-restamp lesson). SYNC-BEFORE-ASYNC ORDERING: every group
+  // the fork seeds here is set synchronously during boot; the out-of-fork orproxy
+  // provider/cost bridge only mutates the store on an async setInterval poll tick
+  // (its first tick fires after boot yields to the event loop), so `session` is
+  // always in the store before the bridge's `provider` group is first published —
+  // CWD/Session ID always render above Provider/Cost within the shared `meta`
+  // column, with no cross-producer ordering API.
+  let sessionSeeded = false
   const updateDashboard = (): void => {
     const events = agent.session.events
     const at = now()
@@ -476,6 +487,17 @@ export function createTuiChat(
           { label: 'used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
         ],
     })
+    if (!sessionSeeded) {
+      sessionSeeded = true
+      dashboardService.setGroup('session', {
+        column: 'meta',
+        title: '',
+        metrics: [
+          { label: 'CWD', value: palette.dim(formattedCwd) },
+          { label: 'Session ID', value: palette.dim(displayText(agent.session.id)) },
+        ],
+      })
+    }
   }
   const updatePromptValues = (): void => {
     const renderTime = now()
