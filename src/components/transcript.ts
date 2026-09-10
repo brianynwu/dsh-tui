@@ -213,8 +213,19 @@ function assistantMessageChildren(
       new Markdown(reasoning, 0, 0, mdTheme, { color: value => palette.dim(value), italic: true }),
     )
   }
-  if (text) children.push(new Markdown(text, 0, 0, mdTheme, { color: value => palette.text(value) }))
+  if (text) children.push(assistantTextMarkdown(text, palette, mdTheme))
   return children
+}
+
+/**
+ * Build the Markdown component for a settled assistant message's response text.
+ * This is the transcript's primary LaTeX surface: it uses default MarkdownOptions,
+ * so pi-tui 0.85.1's built-in LaTeX rendering (renderLatex ?? raw fallback) stays
+ * on. Exported so tests exercise the SHIPPED construction — guarding against a
+ * future change that disables or alters LaTeX here (see test/latex.test.ts).
+ */
+export function assistantTextMarkdown(text: string, palette: Palette, mdTheme: MarkdownTheme): Markdown {
+  return new Markdown(text, 0, 0, mdTheme, { color: value => palette.text(value) })
 }
 
 /**

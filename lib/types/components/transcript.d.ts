@@ -4,7 +4,7 @@
  * panel. Each is a pure function of its inputs and the active palette.
  * @module @deepseek-ai/dsh-tui/components/transcript
  */
-import { Container, type Component, type MarkdownTheme } from '@earendil-works/pi-tui';
+import { Container, Markdown, type Component, type MarkdownTheme } from '@earendil-works/pi-tui';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { SessionEvent, TodoItem } from '@deepseek-ai/dsh-session';
@@ -41,6 +41,14 @@ export declare class HeaderComponent implements Component {
 export declare class UserMessageComponent extends Container {
     constructor(text: string, palette: Palette, mdTheme: MarkdownTheme, label?: string);
 }
+/**
+ * Build the Markdown component for a settled assistant message's response text.
+ * This is the transcript's primary LaTeX surface: it uses default MarkdownOptions,
+ * so pi-tui 0.85.1's built-in LaTeX rendering (renderLatex ?? raw fallback) stays
+ * on. Exported so tests exercise the SHIPPED construction — guarding against a
+ * future change that disables or alters LaTeX here (see test/latex.test.ts).
+ */
+export declare function assistantTextMarkdown(text: string, palette: Palette, mdTheme: MarkdownTheme): Markdown;
 /**
  * A step's timing summary, rendered as a self-refreshing footer that stays at
  * the tail of the step's output. Kept separate from the assistant message so

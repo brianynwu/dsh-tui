@@ -14,6 +14,47 @@ session continues). This fork keeps the original's dsh-core-native **in-place** 
 (`src/chat/model-command.ts`: mutates `target.current`, "New steps will use it", no fork/reseed) and is an
 **in-process cordis `--profile` bundle** — so it composes with a launcher's `--patch` overlays natively.
 
+## pi-tui 0.85 capability adoption (2026-09-09) — alt-screen + scroll + mouse + LaTeX
+
+Adopts the 0.85 capabilities the pinned pi-tui 0.85.1 exposes (previously bumped-but-unused). Version →
+`0.1.5-revive.0`.
+
+- **Alternate-screen renderer** (`src/index.ts`, `src/chat/layout.ts`): swapped `TuiMainScreen` →
+  `TuiAltScreen({mouse:true, wheelScrollLines:3, copyOnSelect:true})`. The TUI now owns a full-screen,
+  self-scrolling, mouse-aware viewport (wheel scroll, drag-select/copy, transcript search) instead of relying
+  on the terminal's native scrollback. `setClearOnShrink` dropped — it is read only by `TuiMainScreen`, never
+  by `TuiAltScreen`.
+- **`setLayoutRoot` tree** (`src/chat/layout.ts` `buildTuiLayout`): the flat `ui.addChild(...)` stack became a
+  single `VStack`. Flow content (header, transcript, spacer, todo, compaction) lives in the SOLE primary
+  `ScrollView` (`follow:'end'`); the live input surface (prompt, inline-modal mount, editor) is pinned. The
+  scroll region is the only grow+shrink entry; pinned entries are `shrink:0` so a long transcript can never
+  clip the editor/prompt/modal. `chat` stays transcript-only (todo/compaction are separate `scrollBody`
+  siblings), so its in-place `children` mutations keep their index meaning.
+- **Home/End belong to the editor** (`freeEditorHomeEnd`): `TuiAltScreen` registers its viewport input
+  listener in its ctor, and `TuiBase.handleTerminalInput` runs listeners before the focused component — so the
+  default `tui.altScreen.top`/`bottom` (= `home`/`end`) would steal the editor's line-start/line-end. They are
+  unbound (merge-preserving); PageUp/PageDown/wheel still scroll. ctrl+home/ctrl+end are also editor-bound, so
+  unbinding — not remapping — is the only conflict-free fix.
+- **Clean stop semantics**: every `ui.stop()` (shutdown, start-failure abort, resume handoff) passes
+  `{preserveScreen:true}` — the default stop dumps the ENTIRE rendered transcript into the shell's normal
+  buffer (`ScrollView.render` is unclipped), and the launcher already captures the session, so the dump is
+  suppressed. **The two shell-return sites (shutdown, start-failure) then emit `\x1b[0m`**: `preserveScreen`
+  is pi-tui's hand-off-to-successor path and skips the SGR reset, and `\x1b[?1049l` does not restore graphic
+  rendition across the buffer switch — so without it the alt-screen's themed background leaks into the shell
+  as a black band (attended-live-verify catch, 2026-09-09). `stop()` already restores mouse/autowrap/
+  bracketed-paste/kitty/cursor/raw and disables `?2031`; SGR is the sole residual. Resume keeps bare
+  `preserveScreen` (the re-exec'd successor repaints).
+- **LaTeX renders via the platform** — pi-tui 0.85.1's `Markdown` component already tokenizes/renders LaTeX by
+  default (`renderLatex ?? raw` fallback; code/currency/env-var guards built in), and the transcript adds no
+  `renderLatex:false` override. NO custom scanner is added; the exported `assistantTextMarkdown` helper is the
+  transcript's render seam, and `test/latex.test.ts` drives it (the SHIPPED construction) to pin the floor:
+  math renders to Unicode, unsupported falls back to the COMPLETE raw source, currency/env/inline+fenced code
+  stay literal.
+- **Deferred**: multi-pane (VStack/HStack) layout — revisit once this ships and a concrete layout need exists.
+
+`lib/` rebuilds byte-identically (`npm ci && npm run build`); `sha256(lib/index.js)` = `418dc631…`. vitest
+27/27 (editor 10, layout 7, latex 10 — exact-equality render/floor gates). Attended live-verify gates the merge.
+
 ## Changes vs upstream v0.1.2
 
 - `package.json`: version → `0.1.3-revive.0`; widened all 25 `@deepseek-ai/dsh-*` peer ranges from

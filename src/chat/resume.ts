@@ -255,7 +255,9 @@ export function createResumeController(deps: ResumeControllerDeps): ResumeContro
       await runtime.terminal.drainInput(100, 20)
       // Disposal can run while terminal draining is pending.
       if (deps.isDisposed()) return
-      ui.stop()
+      // Release the terminal for the host re-exec without dumping the transcript
+      // into the normal buffer (preserveScreen); the host takes over the screen.
+      ui.stop({ preserveScreen: true })
       terminalReleased = true
       // The host re-execs into the session's own workspace: process cwd, not the
       // restored session header, is what the filesystem and shell tools resolve

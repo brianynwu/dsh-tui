@@ -1,7 +1,7 @@
 {
   "name": "@brianynwu/dsh-tui",
   "description": "Claude Code-style interactive terminal UI for DeepSeek Harness agents",
-  "version": "0.1.4-revive.0",
+  "version": "0.1.5-revive.0",
   "type": "module",
   "publishConfig": {
     "access": "public"

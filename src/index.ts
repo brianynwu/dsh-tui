@@ -11,8 +11,9 @@ import {
   Key,
   Spacer,
   Text,
-  TuiMainScreen,
+  TuiAltScreen,
   ProcessTerminal,
+  getKeybindings,
   matchesKey,
   visibleWidth,
   type Component,
@@ -142,6 +143,7 @@ import {
 } from './chat/model-command.ts'
 import { createQuestionQueue } from './chat/questions.ts'
 import { createResumeController } from './chat/resume.ts'
+import { buildTuiLayout, freeEditorHomeEnd } from './chat/layout.ts'
 import type { TuiRuntime } from './runtime.ts'
 import { WorkspaceFileSearch } from './chat/file-autocomplete.ts'
 
@@ -291,11 +293,22 @@ export function createTuiChat(
   const resolved = resolveTuiConfig(config)
   const palette = createPalette(resolved.theme.color)
   const mdTheme = markdownTheme(palette)
-  const ui = new TuiMainScreen(runtime.terminal, resolved.showHardwareCursor)
-  // pi-tui 0.85 flipped the clear-on-shrink default to false (env-var defaults
-  // removed in 0.85.0); restore the prior behavior so shrinking content still
-  // clears stale rows on re-render.
-  ui.setClearOnShrink(true)
+  // Alternate-screen renderer: the TUI owns a full-screen, self-scrolling,
+  // mouse-aware viewport (0.85 capability adoption). Scroll + mouse selection
+  // come from the renderer; `setClearOnShrink` is intentionally dropped — it is
+  // read only by TuiMainScreen (main-screen scrollback), never by TuiAltScreen.
+  const ui = new TuiAltScreen(runtime.terminal, resolved.showHardwareCursor, undefined, {
+    mouse: true,
+    wheelScrollLines: 3,
+    copyOnSelect: true,
+    // Clickable jump-to-end affordance, centered on the last row while the
+    // transcript is scrolled away from its end — the visible route back to
+    // follow-end (a mouse click; PageDown also re-reaches the end).
+    scrollToEndIndicator: () => palette.dim('↓ jump to latest'),
+  })
+  // Keep Home/End with the focused editor (the alt-screen viewport would
+  // otherwise steal them for scroll-to-top/bottom). See freeEditorHomeEnd.
+  freeEditorHomeEnd(getKeybindings())
   const chat = new Container()
   const todoContainer = new Container()
   const questionContainer = new Container()
@@ -459,15 +472,15 @@ export function createTuiChat(
     parseTuiPromptTemplate(displayInlineText(resolved.theme.rightPrompt)),
     valueName => ctx.tuiPrompt.get(valueName),
   )
-  ui.addChild(header)
-  ui.addChild(chat)
-  ui.addChild(new Spacer(1))
   todoContainer.addChild(todo)
-  ui.addChild(todoContainer)
-  ui.addChild(compactionStatusLine)
-  ui.addChild(promptContext)
-  ui.addChild(questionContainer)
-  ui.addChild(editor)
+  // Alt-screen layout tree (see ./chat/layout.ts): flow content (header,
+  // transcript, todo, compaction) inside the SOLE primary ScrollView; prompt /
+  // inline-modal mount / editor pinned below. chat stays transcript-only, so its
+  // in-place children mutations keep their index meaning.
+  const { root: layoutRoot } = buildTuiLayout({
+    header, chat, todoContainer, compactionStatusLine, promptContext, questionContainer, editor,
+  })
+  ui.setLayoutRoot(layoutRoot)
   ui.setFocus(editor)
   const updateTerminalTitle = (): void => {
     runtime.terminal.setTitle(displayText(
@@ -1030,7 +1043,16 @@ export function createTuiChat(
       modelController.clearOverlay()
       questions.unregister()
       await runtime.terminal.drainInput(100, 20)
-      ui.stop()
+      // preserveScreen: exit the alt-buffer WITHOUT dumping the whole rendered
+      // transcript into the shell (the default stop() dumps it; the launcher
+      // already captures the session). preserveScreen is pi-tui's hand-off-to-a-
+      // successor-TUI path, so it does NOT reset the graphic rendition — and
+      // `\x1b[?1049l` does not restore SGR across the buffer switch, so the
+      // alt-screen's themed background would leak into the shell (a black band).
+      // stop() already restores mouse/autowrap/bracketed-paste/kitty/cursor/raw
+      // and disables ?2031; SGR is the only residual, so reset it explicitly.
+      ui.stop({ preserveScreen: true })
+      runtime.terminal.write('\x1b[0m')
       if (exitProcess) {
         if (runtime.goodbyeMessage !== undefined) {
           runtime.terminal.write(`${palette.dim(displayText(runtime.goodbyeMessage))}\n`)
@@ -1808,7 +1830,11 @@ export function createTuiChat(
     )
     clearStatus()
     questions.unregister()
-    ui.stop()
+    // start() can throw AFTER alt-screen activation — exit the alt-buffer; reset
+    // SGR (preserveScreen skips it) so the shell is not left with the themed
+    // background active. See the shutdown() site for the full rationale.
+    ui.stop({ preserveScreen: true })
+    runtime.terminal.write('\x1b[0m')
     throw error
   }
   tuiServiceFiber = ctx.inject([], (serviceCtx) => {
