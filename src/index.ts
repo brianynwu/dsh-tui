@@ -433,16 +433,16 @@ export function createTuiChat(
   }
   // Fold the in-fork session metrics into the dashboard service. Everything here is
   // already in-process from the session event stream — no middleware plugin. This
-  // never sets the Provider/Cost group: those have no in-fork source and are owned
-  // entirely by the out-of-fork orproxy bridge, which stacks them into the SAME
-  // `ctx` column (below the fork's Context fill/used rows).
+  // never sets the Provider/Cost metrics: those have no in-fork source and are owned
+  // entirely by the out-of-fork orproxy bridge — it stacks Provider into the `meta`
+  // column (below Model) and Cost into the `ctx` column (below fill/used).
   // SYNC-BEFORE-ASYNC ORDERING: the fork sets the `context` (column `ctx`) and
   // `session` (column `meta`) groups synchronously during boot; the out-of-fork
   // bridge only mutates the store on an async setInterval poll tick (its first tick
-  // fires after boot yields to the event loop), so the fork's context group is
-  // always in the `ctx` column before the bridge's provider group is first
-  // published — Provider/Cost always render BELOW fill/used, with no cross-producer
-  // ordering API. `meta` (CWD/Session/Model/Branch) renders rightmost.
+  // fires after boot yields to the event loop), so the fork's groups are always in
+  // their columns before the bridge's provider/cost groups are first published —
+  // Provider renders below Model and Cost below fill/used, with no cross-producer
+  // ordering API. `meta` renders rightmost.
   const updateDashboard = (): void => {
     const events = agent.session.events
     const at = now()
@@ -485,8 +485,9 @@ export function createTuiChat(
           { label: 'used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
         ],
     })
-    // The `meta` column: CWD + Session ID (static) plus Model + Branch (moved off
-    // the status line). Set every tick — fork-owned, so re-stamping is safe (the
+    // The `meta` column: CWD, Branch, Session ID, Model (Model + Branch moved off
+    // the status line). The out-of-fork bridge stacks Provider below these rows in
+    // the same column. Set every tick — fork-owned, so re-stamping is safe (the
     // no-restamp lesson only forbids the tick overwriting the BRIDGE's group) —
     // so Model reflects a mid-session /model swap. The setGroup key is stable, so
     // the column keeps its first-set (rightmost) position across ticks.
@@ -495,9 +496,9 @@ export function createTuiChat(
       title: '',
       metrics: [
         { label: 'CWD', value: palette.dim(formattedCwd) },
+        { label: 'Branch', value: branch === undefined ? undefined : palette.dim(displayText(branch)) },
         { label: 'Session ID', value: palette.dim(displayText(agent.session.id)) },
         { label: 'Model', value: palette.dim(displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current))) },
-        { label: 'Branch', value: branch === undefined ? undefined : palette.dim(displayText(branch)) },
       ],
     })
   }

@@ -68,7 +68,7 @@ describe('DashboardPane render', () => {
     const pane = new DashboardPane(() => groups, plainPalette)
     const lines = pane.render(60)
 
-    expect(lines[0]).toContain('runtime') // titled top border
+    expect(lines[0]).toContain('Runtime Dashboard') // titled top border
     expect(lines[0].startsWith('╭')).toBe(true)
     expect(lines.at(-1)?.startsWith('╰')).toBe(true)
     const body = lines.slice(1, -1).join('\n')
@@ -85,6 +85,20 @@ describe('DashboardPane render', () => {
     const pane = new DashboardPane(() => groups, plainPalette)
     const body = pane.render(60).slice(1, -1).join('\n')
     expect(body).toContain('CWD ~/x')
+  })
+
+  it('colors a title-less group\'s labels with accent (like a header); titled groups keep dim labels', () => {
+    // A marking palette so accent vs dim is observable in the output text.
+    const marking = new Proxy({}, {
+      get: (_t, role) => (text: string) => role === 'accent' ? `A(${text})` : role === 'dim' ? `D(${text})` : text,
+    }) as unknown as Palette
+    const groups: DashboardGroup[] = [
+      { title: 'Timing', metrics: [{ label: 'wait', value: '0.4s' }] },       // titled ⇒ dim label
+      { title: '', metrics: [{ label: 'CWD', value: 'x' }] },                 // title-less ⇒ accent label
+    ]
+    const body = new DashboardPane(() => groups, marking).render(60).join('\n')
+    expect(body).toContain('A(CWD)')   // title-less label rendered with accent
+    expect(body).toContain('D(wait)')  // titled group's label stays dim
   })
 
   it('stacks groups sharing a column key into ONE column, in insertion order', () => {
@@ -139,7 +153,7 @@ describe('DashboardPane render', () => {
     expect(pane.handleMouse(click)).toEqual({ handled: true, render: true })
     const collapsed = pane.render(60)
     expect(collapsed).toHaveLength(1)
-    expect(collapsed[0]).toContain('runtime')
+    expect(collapsed[0]).toContain('Runtime Dashboard')
     expect(collapsed[0]).toContain('tap to expand')
     expect(collapsed[0]).not.toContain('0.4s') // metrics are hidden while collapsed
 

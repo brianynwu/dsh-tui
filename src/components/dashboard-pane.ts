@@ -27,7 +27,11 @@ function padVisible(text: string, width: number): string {
 
 /** Render one group's lines: a title line (omitted when the title is empty) over `label value` rows. */
 function groupLines(group: DashboardGroup, palette: Palette): string[] {
-  const rows = group.metrics.map(m => `${palette.dim(m.label)} ${m.value ?? palette.dim('—')}`)
+  // A title-less group has no header, so its metric LABELS carry the column's identity —
+  // render them in the accent color (matching the titled groups' headers). Titled groups
+  // keep dim labels beneath their accent header.
+  const labelColor = group.title === '' ? palette.accent : palette.dim
+  const rows = group.metrics.map(m => `${labelColor(m.label)} ${m.value ?? palette.dim('—')}`)
   return group.title === '' ? rows : [palette.bold(palette.accent(group.title)), ...rows]
 }
 
@@ -106,7 +110,7 @@ export class DashboardPane implements Component {
     const fit = (line: string): string => padVisible(truncateToWidth(line, width, ''), width)
 
     if (this.collapsed) {
-      const label = `${palette.dim('▸')} ${palette.bold('runtime')}`
+      const label = `${palette.dim('▸')} ${palette.bold('Runtime Dashboard')}`
       const hint = palette.dim('tap to expand')
       const gap = ' '.repeat(Math.max(1, width - visibleWidth(label) - visibleWidth(hint)))
       return [fit(`${label}${gap}${hint}`)]
@@ -116,7 +120,7 @@ export class DashboardPane implements Component {
     const innerWidth = Math.max(1, width - 4)
     // `▾` marks the pane as collapsible; the whole row (indeed the whole pane) is
     // the click target, so the glyph is a hint, not a hit-box.
-    const top = `╭─ ${palette.dim('▾')} ${palette.bold('runtime')} `
+    const top = `╭─ ${palette.dim('▾')} ${palette.bold('Runtime Dashboard')} `
     const topRule = fit(`${top}${palette.dim('─'.repeat(Math.max(0, width - visibleWidth(top) - 1)))}${palette.dim('╮')}`)
     const bottomRule = fit(palette.dim(`╰${'─'.repeat(Math.max(0, width - 2))}╯`))
     if (groups.length === 0) {
