@@ -78,6 +78,7 @@ import {
   formatTokens,
   recordEventUsage,
   sessionTokens,
+  tokenThroughput,
 } from './chat/tokens.ts'
 import {
   fadeGlyph,
@@ -458,31 +459,38 @@ export function createTuiChat(
     dashboardService.setGroup('timing', {
       title: 'Timing',
       metrics: [
-        { label: 'wait', value: duration(totals?.ttft) },
-        { label: 'think', value: duration(totals?.thinking) },
-        { label: 'resp', value: duration(totals?.responding) },
-        { label: 'tools', value: duration(totals?.tools) },
+        { label: 'Wait', value: duration(totals?.ttft) },
+        { label: 'Think', value: duration(totals?.thinking) },
+        { label: 'Resp', value: duration(totals?.responding) },
+        { label: 'Tools', value: duration(totals?.tools) },
       ],
     })
     const rate = cacheHitRate(tokens)
+    // Token throughput (TP): the LATEST step's output tokens over its response wall-time
+    // (both from the llm stream's per-step usage chunk + timing buckets). Settles at step
+    // end like the Timing durations; undefined ('—') until a step reports both.
+    const stepUsageKey = position === undefined ? undefined : `${position.turn}:${position.step}`
+    const stepOutput = stepUsageKey === undefined ? undefined : tokens.byStep.get(stepUsageKey)?.outputTokens
+    const tps = tokenThroughput(stepOutput, totals?.responding ?? 0)
     dashboardService.setGroup('tokens', {
       title: 'Tokens',
       metrics: [
-        { label: '↑in', value: palette.dim(formatTokens(tokens.input)) },
-        { label: '↓out', value: palette.dim(formatTokens(tokens.output)) },
-        { label: 'cache', value: rate === undefined ? undefined : palette.dim(`${rate}%`) },
+        { label: '↑In', value: palette.dim(formatTokens(tokens.input)) },
+        { label: '↓Out', value: palette.dim(formatTokens(tokens.output)) },
+        { label: 'Cache', value: rate === undefined ? undefined : palette.dim(`${rate}%`) },
+        { label: 'TP', value: tps === undefined ? undefined : palette.dim(`${Math.round(tps)} tok/s`) },
       ],
     })
     const contextWindow = modelController.contextWindow()
     const used = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
     dashboardService.setGroup('context', {
-      column: 'ctx',                              // the orproxy bridge stacks Provider/Cost below these rows
+      column: 'ctx',                              // the orproxy bridge stacks Cost below these rows
       title: 'Context',
       metrics: contextWindow === undefined
-        ? [{ label: 'fill', value: undefined }]
+        ? [{ label: 'Fill', value: undefined }]
         : [
-          { label: 'fill', value: palette.dim(`${Math.min(100, Math.round((used / contextWindow) * 100))}%`) },
-          { label: 'used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
+          { label: 'Fill', value: palette.dim(`${Math.min(100, Math.round((used / contextWindow) * 100))}%`) },
+          { label: 'Used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
         ],
     })
     // The `meta` column: CWD, Branch, Session ID, Model (Model + Branch moved off

@@ -84,6 +84,22 @@ export function sessionTokens(session: Session): SessionTokenTotals {
 }
 
 /**
+ * Output-token throughput (tokens/second) for one step: its output tokens over the
+ * step's response wall-time. Returns `undefined` when either input is missing or
+ * non-positive (no usage reported yet, or a zero/absent response duration) so the
+ * caller shows a placeholder rather than a 0 or a divide-by-zero.
+ * @param outputTokens - The step's output token count (from the llm stream usage).
+ * @param respondingMs - The step's accumulated response wall-time in milliseconds.
+ * @returns Tokens per second, or `undefined` when it cannot be computed.
+ */
+export function tokenThroughput(outputTokens: number | undefined, respondingMs: number): number | undefined {
+  if (outputTokens === undefined || outputTokens <= 0) return undefined
+  const seconds = respondingMs / 1000
+  if (seconds <= 0) return undefined
+  return outputTokens / seconds
+}
+
+/**
  * Format a token count with a compact k/m suffix for the footer.
  * @param value - Token count.
  * @returns The compact display string.

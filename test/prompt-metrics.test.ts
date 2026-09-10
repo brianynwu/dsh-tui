@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { resolveTuiConfig } from '../src/config.ts'
 import { parseTuiPromptTemplate, renderTuiPromptTemplate } from '../src/prompt.ts'
-import { formatContextLabel } from '../src/chat/tokens.ts'
+import { formatContextLabel, tokenThroughput } from '../src/chat/tokens.ts'
 
 function valueNames(template: string): string[] {
   return parseTuiPromptTemplate(template)
@@ -42,6 +42,20 @@ describe('formatContextLabel — percentage + used/total breakdown', () => {
 
   it('clamps an over-window measurement to 100%', () => {
     expect(formatContextLabel(200_000, 131_072)).toBe('100% context (200k/131k)')
+  })
+})
+
+describe('tokenThroughput — output tokens/sec for one step', () => {
+  it('computes tokens per second', () => {
+    expect(tokenThroughput(300, 2_000)).toBe(150)   // 300 tok over 2s
+    expect(tokenThroughput(50, 500)).toBe(100)
+  })
+  it('returns undefined when output is missing or non-positive', () => {
+    expect(tokenThroughput(undefined, 1_000)).toBeUndefined()
+    expect(tokenThroughput(0, 1_000)).toBeUndefined()
+  })
+  it('returns undefined for a zero/absent response duration (no divide-by-zero)', () => {
+    expect(tokenThroughput(100, 0)).toBeUndefined()
   })
 })
 
