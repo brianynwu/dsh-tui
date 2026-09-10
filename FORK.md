@@ -55,6 +55,33 @@ Adopts the 0.85 capabilities the pinned pi-tui 0.85.1 exposes (previously bumped
 `lib/` rebuilds byte-identically (`npm ci && npm run build`); `sha256(lib/index.js)` = `418dc631…`. vitest
 27/27 (editor 10, layout 7, latex 10 — exact-equality render/floor gates). Attended live-verify gates the merge.
 
+## Resume-hint made a config seam (2026-09-09, `v0.1.6-revive.0`)
+
+The exit "how to resume" line was hard-coded in `src/startup.ts`
+(`ctx.provide('tuiGoodbyeMessage', 'To resume this session: dsh --profile tui --resume=<id>')`), which is
+correct ONLY for a stock deployment (default `DSH_HOME`, default `session-persistence-jsonl` root). A custom
+launcher with a different `DSH_HOME`/session root printed a command that fails "session not found". Since this
+fork is public, the hint now honors the fork's own stated design — the launcher owns the wording:
+
+- New **top-level `Config.resumeHint`** (config.ts), a template string schema-defaulted to the stock
+  `To resume this session: dsh --profile tui --resume={session}` — so stock output is byte-identical. `{session}`
+  expands to the minted session id; an empty string suppresses the line. It sits beside `welcome`/`initialSkill`
+  (launcher-facing `Config`-only fields), NOT in `TuiConfig`/`ResolvedTuiConfig` (no render-time consumer).
+- New pure `formatResumeHint(template, sessionId)` (config.ts): interpolates `{session}`; returns nothing on an
+  empty/absent template or an unminted session (`--help`). `src/index.ts` `apply` builds the exit line from it +
+  `ctx.get('tuiStartup')?.sessionId`.
+- **Retired** the `tuiGoodbyeMessage` cordis context key + `TUI_GOODBYE_MESSAGE_KEY` export (runtime.ts) and the
+  hard-coded `startup.ts` provide — a launcher could never override the key anyway (startup double-provided it).
+- **Env seam** (`cordis.patch.yml` `tui` row): `resumeHint: !!js process.env.DSH_TUI_RESUME_HINT ?? '<stock>'`
+  — a launcher exports `DSH_TUI_RESUME_HINT` to its own command; unset ⇒ the stock command. An env seam, not a
+  launcher `--patch` on the `tui` row: a tui-row `--patch` REPLACES the whole `config` block (verified via
+  `--dump-config`), which would wipe `sessionId`/`showReasoning`/`maxToolOutputLines`. The `!!js` literal equals
+  `DEFAULT_RESUME_HINT`; `test/resume-hint.test.ts` guards the two homes against drift.
+
+New `lib/` baseline: `sha256(lib/index.js)` = `7a86e5a9…` (reproducible via `npm ci && npm run build`;
+`cordis.patch.yml` ships as-is, not compiled in). vitest 36/36 (adds `test/resume-hint.test.ts`, 9). Attended
+live-verify gates the merge.
+
 ## Changes vs upstream v0.1.2
 
 - `package.json`: version → `0.1.3-revive.0`; widened all 25 `@deepseek-ai/dsh-*` peer ranges from

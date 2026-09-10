@@ -41,10 +41,11 @@ export const inject = ['cmdlineArgs']
 
 /**
  * Build the TUI command grammar, then provide the session identity for the
- * agent-loop row ({@link CONFIGURED_AGENT_IDENTITIES_KEY}), the
- * {@link TuiStartup} service, and the exit goodbye line. On `--help` or a
- * usage error nothing is provided, so the dependent rows never activate and
- * the process exits through the cmdline exit seam.
+ * agent-loop row ({@link CONFIGURED_AGENT_IDENTITIES_KEY}) and the
+ * {@link TuiStartup} service (whose `sessionId` the renderer expands into the
+ * config-driven exit resume-hint). On `--help` or a usage error nothing is
+ * provided, so the dependent rows never activate and the process exits through
+ * the cmdline exit seam.
  * @param ctx - plugin context with `cmdlineArgs` injected
  */
 export function apply(ctx: Context): void {
@@ -65,7 +66,6 @@ export function apply(ctx: Context): void {
       : { id: SessionId(resume), resume: true }
     ctx.provide(CONFIGURED_AGENT_IDENTITIES_KEY, { [MAIN_AGENT_ID]: identity })
     ctx.provide(TUI_STARTUP_SERVICE, { sessionId: identity.id, resume: identity.resume })
-    ctx.provide('tuiGoodbyeMessage', `To resume this session: dsh --profile tui --resume=${identity.id}`)
     installResumeHost(ctx)
   })
   parseCmdline(ctx, program)

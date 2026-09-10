@@ -91,6 +91,8 @@ const DEFAULT_LEFT_PROMPT = '${cwd}${git/worktree}${model}${token_meter/cache_hi
 const DEFAULT_RIGHT_PROMPT = '${queued}'
 const DEFAULT_INPUT_PROMPT = '${symbol} ${indicator}'
 const DEFAULT_INPUT_PLACEHOLDER = 'press enter to steer and esc to cancel'
+/** Stock exit resume-hint template; `{session}` expands to the minted session id. */
+export const DEFAULT_RESUME_HINT = 'To resume this session: dsh --profile tui --resume={session}'
 const TuiThemeConfigSchema: z<TuiThemeConfig> = z.object({
   color: colorSchema,
   truecolor: truecolorSchema,
@@ -138,6 +140,16 @@ export interface Config extends TuiConfig {
    * leaves the first turn to the user.
    */
   initialSkill?: string
+  /**
+   * Template for the line printed once the terminal is released on exit,
+   * telling the user how to resume this session; `{session}` expands to the
+   * minted session id. Defaults to the stock `dsh --profile tui --resume=<id>`
+   * command. A launcher whose deployment resumes differently (a non-default
+   * `DSH_HOME` or session root) overrides this to its own command; an empty
+   * string suppresses the line. The launcher owns the wording because only it
+   * knows how the process was invoked.
+   */
+  resumeHint?: string
 }
 
 /** Schemastery schema for the full plugin configuration. */
@@ -145,6 +157,7 @@ export const Config: z<Config> = z.object({
   welcome: z.string(),
   sessionId: z.string().default('main'),
   initialSkill: z.string(),
+  resumeHint: z.string().default(DEFAULT_RESUME_HINT),
   showReasoning: tuiConfigSchemaFields.showReasoning,
   maxToolOutputLines: tuiConfigSchemaFields.maxToolOutputLines,
   maxDiffEditLength: tuiConfigSchemaFields.maxDiffEditLength,
@@ -230,4 +243,24 @@ export function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConf
     },
     title: config?.title ?? 'DeepSeek Harness',
   }
+}
+
+/**
+ * Build the exit resume-hint line from its template and the minted session id.
+ * The default template is applied by config resolution (the `Config` schema),
+ * so this helper does not itself default: an absent or empty template, or an
+ * unminted session (`--help`/usage error), yields no line.
+ *
+ * @param template - the `resumeHint` template; `{session}` is replaced with the
+ *   session id. `undefined` or empty/whitespace suppresses the line.
+ * @param sessionId - the minted session id, or `undefined` when none exists.
+ * @returns the printable line, or `undefined` to print nothing.
+ */
+export function formatResumeHint(
+  template: string | undefined,
+  sessionId: string | undefined,
+): string | undefined {
+  if (sessionId === undefined) return undefined
+  if (template === undefined || template.trim() === '') return undefined
+  return template.replaceAll('{session}', sessionId)
 }

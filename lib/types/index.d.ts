@@ -21,7 +21,7 @@ declare module '@deepseek-ai/cordis' {
         tui: TuiExtensionService;
     }
 }
-export { INITIAL_SKILL_KEY, MAIN_SESSION_ID_KEY, TUI_GOODBYE_MESSAGE_KEY, type MainSessionIdentity, } from './runtime.ts';
+export { INITIAL_SKILL_KEY, MAIN_SESSION_ID_KEY, type MainSessionIdentity, } from './runtime.ts';
 /**
  * Optional terminal-local interaction service provided by one mounted TUI.
  *

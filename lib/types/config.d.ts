@@ -59,6 +59,8 @@ export interface TuiConfig {
     /** Terminal window title while the UI is mounted; a logged session title prefixes it. */
     title?: string;
 }
+/** Stock exit resume-hint template; `{session}` expands to the minted session id. */
+export declare const DEFAULT_RESUME_HINT = "To resume this session: dsh --profile tui --resume={session}";
 /** Schemastery schema for presentation settings embedded by app bundles. */
 export declare const TuiConfigSchema: z<TuiConfig>;
 /** Serializable plugin configuration. */
@@ -74,6 +76,16 @@ export interface Config extends TuiConfig {
      * leaves the first turn to the user.
      */
     initialSkill?: string;
+    /**
+     * Template for the line printed once the terminal is released on exit,
+     * telling the user how to resume this session; `{session}` expands to the
+     * minted session id. Defaults to the stock `dsh --profile tui --resume=<id>`
+     * command. A launcher whose deployment resumes differently (a non-default
+     * `DSH_HOME` or session root) overrides this to its own command; an empty
+     * string suppresses the line. The launcher owns the wording because only it
+     * knows how the process was invoked.
+     */
+    resumeHint?: string;
 }
 /** Schemastery schema for the full plugin configuration. */
 export declare const Config: z<Config>;
@@ -114,4 +126,16 @@ export interface ResolvedTuiConfig {
  * @returns Complete settings consumed by the TUI renderer.
  */
 export declare function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConfig;
+/**
+ * Build the exit resume-hint line from its template and the minted session id.
+ * The default template is applied by config resolution (the `Config` schema),
+ * so this helper does not itself default: an absent or empty template, or an
+ * unminted session (`--help`/usage error), yields no line.
+ *
+ * @param template - the `resumeHint` template; `{session}` is replaced with the
+ *   session id. `undefined` or empty/whitespace suppresses the line.
+ * @param sessionId - the minted session id, or `undefined` when none exists.
+ * @returns the printable line, or `undefined` to print nothing.
+ */
+export declare function formatResumeHint(template: string | undefined, sessionId: string | undefined): string | undefined;
 //# sourceMappingURL=config.d.ts.map

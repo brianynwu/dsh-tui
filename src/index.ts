@@ -93,6 +93,7 @@ import {
   type StepPosition,
 } from './chat/timing.ts'
 import {
+  formatResumeHint,
   resolveTuiConfig,
   type Config,
 } from './config.ts'
@@ -194,7 +195,6 @@ declare module '@deepseek-ai/cordis' {
 export {
   INITIAL_SKILL_KEY,
   MAIN_SESSION_ID_KEY,
-  TUI_GOODBYE_MESSAGE_KEY,
   type MainSessionIdentity,
 } from './runtime.ts'
 
@@ -1938,7 +1938,10 @@ export function apply(ctx: Context, config: Config): void {
   // boundary from COLORTERM; an explicit theme value still wins.
   const truecolor = config.theme?.truecolor ?? ['truecolor', '24bit'].includes(process.env.COLORTERM ?? '')
   const resumeHost = ctx.get('tuiResumeHost')
-  const goodbyeMessage = ctx.get('tuiGoodbyeMessage')
+  // The exit resume-hint is built from the launcher-owned `resumeHint` template
+  // (schema-defaulted to the stock command) and the minted session id; an empty
+  // template or an unminted session prints nothing.
+  const goodbyeMessage = formatResumeHint(config.resumeHint, ctx.get('tuiStartup')?.sessionId)
   // The launcher seeds a guided fresh session's first turn through this key; a
   // config value still wins. Consumed in createTuiChat via config.initialSkill.
   const initialSkill = config.initialSkill ?? ctx.get('tuiInitialSkill')

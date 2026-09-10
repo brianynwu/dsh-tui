@@ -28,8 +28,6 @@ declare module '@deepseek-ai/cordis' {
         tuiResumeHost: TuiResumeHost;
         /** Launcher-owned `main` session identity; absent lets the app mint one. */
         mainSessionId: MainSessionIdentity | undefined;
-        /** Line the launcher wants printed on exit; absent prints nothing. */
-        tuiGoodbyeMessage: string | undefined;
         /** Skill the launcher wants auto-invoked as the fresh session's first turn; absent leaves it to the user. */
         tuiInitialSkill: string | undefined;
     }
@@ -53,15 +51,6 @@ export interface MainSessionIdentity {
  * the entry's context. Absent leaves the choice to the app.
  */
 export declare const MAIN_SESSION_ID_KEY = "mainSessionId";
-/**
- * Context key the startup plugin sets
- * (`ctx.provide(TUI_GOODBYE_MESSAGE_KEY, line)`) to supply the line the TUI
- * prints once the terminal is released on exit — the command that resumes
- * this session. The provider owns the wording because only it knows how the
- * process was invoked; the TUI escapes terminal controls before rendering.
- * Absent prints nothing.
- */
-export declare const TUI_GOODBYE_MESSAGE_KEY = "tuiGoodbyeMessage";
 /**
  * Context key a launcher sets (`ctx.provide(INITIAL_SKILL_KEY, name)`) to seed
  * a fresh session's first user turn with `/skill:<name>` — a guided-session
