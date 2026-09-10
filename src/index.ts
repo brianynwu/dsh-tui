@@ -1049,8 +1049,8 @@ export function createTuiChat(
       // successor-TUI path, so it does NOT reset the graphic rendition — and
       // `\x1b[?1049l` does not restore SGR across the buffer switch, so the
       // alt-screen's themed background would leak into the shell (a black band).
-      // stop() already restores mouse/autowrap/bracketed-paste/kitty/cursor/raw
-      // and disables ?2031; SGR is the only residual, so reset it explicitly.
+      // stop() already restores mouse/autowrap/bracketed-paste/kitty/cursor/raw;
+      // SGR is the only residual, so reset it explicitly.
       ui.stop({ preserveScreen: true })
       runtime.terminal.write('\x1b[0m')
       if (exitProcess) {
@@ -1073,30 +1073,18 @@ export function createTuiChat(
     void shutdown(true)
   }
 
-  /** Swap the palette and all derived themes for the given terminal color scheme. */
-  const applyColorScheme = (scheme: TerminalColorScheme): void => {
-    if (scheme === currentScheme) return
-    currentScheme = scheme
-    Object.assign(palette, createPalette(resolved.theme.color, scheme))
-    Object.assign(mdTheme, markdownTheme(palette))
-    // `setStatus` below re-derives `editor.borderColor` from the new palette.
-    rebuildTranscript(false)
-    setStatus(agent.status)
-    requestRender()
-  }
-  let currentScheme: TerminalColorScheme = 'dark'
-
-  // Apply any color scheme the terminal reports. Registering before the query
-  // below means even a synchronous reply reaches `applyColorScheme`; in practice
-  // the startup query's reply is the only report, since dsh-tui leaves
-  // unsolicited color-scheme notifications disabled.
-  const disposeSchemeListener = ui.onTerminalColorSchemeChange(applyColorScheme)
-
-  // Ask the terminal for its color scheme via device-status report; the reply,
-  // if any, arrives through the listener above. Most terminals do not respond,
-  // so we keep the dark-optimised palette. Swallow a query-write failure for the
-  // same reason.
-  ui.queryTerminalColorScheme({ timeoutMs: 2000 }).catch(() => {})
+  // dsh-tui uses a FIXED dark-optimised palette and deliberately does NOT probe
+  // the terminal's color scheme. pi-tui's only probe is the `CSI ?996 n` DSR
+  // query, whose asynchronous reply races terminal teardown: it can land after
+  // `terminal.stop()` releases raw mode and then be echoed by the shell as a
+  // stray `^[[?997;1n` just before the goodbye line on exit. That is a known
+  // pi-tui teardown-drain class (earendil-works/pi #7294, #8184; the DA-fence
+  // fix is unmerged in 0.85.1, and drainInput only idle-waits), and the DSR
+  // reply is itself unreliable (#7770, #8603 — both closed no-action). Auto
+  // light/dark adaptation is not worth that leak for a dark-optimised TUI, so
+  // the query AND its `onTerminalColorSchemeChange` listener are intentionally
+  // omitted. Do not re-add the query without the DA-fence teardown drain.
+  const currentScheme: TerminalColorScheme = 'dark'
 
   const setToolsVisibility = (next: ToolCardVisibility): void => {
     toolsVisibility = next
@@ -1770,7 +1758,6 @@ export function createTuiChat(
     disposeStatus()
     disposeError()
     disposeAgent()
-    disposeSchemeListener()
     disposeTargetListeners()
     modelController.detach()
   }
