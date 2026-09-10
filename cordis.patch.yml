@@ -91,8 +91,12 @@
         # root) exports DSH_TUI_RESUME_HINT to its own command; unset ⇒ the stock command (byte-identical to
         # the schema default). `{session}` is expanded by the renderer to the minted session id; an empty value
         # suppresses the line. Env seam (not a launcher --patch) because a tui-row --patch REPLACES this whole
-        # config block. The literal MUST equal config.ts DEFAULT_RESUME_HINT (test/resume-hint.test.ts guards).
-        resumeHint: !!js process.env.DSH_TUI_RESUME_HINT ?? 'To resume this session: dsh --profile tui --resume={session}'
+        # config block. The whole `!!js` expression is YAML-DOUBLE-QUOTED: the literal contains `: ` (colon-space)
+        # and `{`, which as a bare YAML plain scalar would parse as a nested mapping (resumeHint ⇒ an object ⇒
+        # boot-time "expected string" — a real live-verify catch). js-yaml passes the resolved scalar to the
+        # `!!js` tag, so quoting is transparent to evaluation. The literal MUST equal config.ts
+        # DEFAULT_RESUME_HINT (test/resume-hint.test.ts guards).
+        resumeHint: !!js "process.env.DSH_TUI_RESUME_HINT ?? 'To resume this session: dsh --profile tui --resume={session}'"
 
     - id: tool-ask-user
       name: '@deepseek-ai/dsh-tool-ask-user'

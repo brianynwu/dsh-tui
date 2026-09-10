@@ -59,7 +59,7 @@ describe('cordis.patch.yml resumeHint env seam', () => {
   // must stay identical to DEFAULT_RESUME_HINT — this guards the two homes of the string from drifting apart.
   it('falls back to exactly DEFAULT_RESUME_HINT when the env var is unset', () => {
     const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-    const match = patch.match(/resumeHint:\s*!!js process\.env\.DSH_TUI_RESUME_HINT \?\? '([^']*)'/)
+    const match = patch.match(/resumeHint:\s*!!js "process\.env\.DSH_TUI_RESUME_HINT \?\? '([^']*)'"/)
     expect(match, 'resumeHint env-seam line present in cordis.patch.yml').not.toBeNull()
     expect(match?.[1]).toBe(DEFAULT_RESUME_HINT)
   })
