@@ -201,6 +201,26 @@ export function openTurn(events: readonly SessionEvent[]): number | undefined {
 }
 
 /**
+ * Turn/step coordinates of the most recent step — open or already closed — or
+ * `undefined` when the log holds no step. Unlike {@link openStepPhase}, which
+ * stops at a `step/end`/`turn/end`, this returns the last `step/start` in the
+ * log regardless, so it feeds {@link StepTimingTracker.totalsAt} the step whose
+ * durations to show: the live one while a step runs, and the just-finished one's
+ * final durations once it closes or the turn ends (including on a resumed log
+ * whose steps are all complete). Derived from the log itself, so it needs no
+ * remembered cross-tick state.
+ * @param events - Session events to scan from the tail.
+ * @returns The latest step's position, or `undefined`.
+ */
+export function latestStep(events: readonly SessionEvent[]): StepPosition | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index] as SessionEvent
+    if (event.type === 'step/start') return event.data
+  }
+  return undefined
+}
+
+/**
  * Phase-specific status glyph, keyed by the running step's active timing bucket.
  * `ttft` is the pre-first-token wait a running turn falls back to between steps.
  */

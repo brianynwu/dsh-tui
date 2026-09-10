@@ -10,6 +10,7 @@ import type { TuiOverlayRequest, TuiOverlaySession } from './extension/types.ts'
 import { type Config } from './config.ts';
 import type { TuiRuntime } from './runtime.ts';
 export { TuiPromptService } from './prompt.ts';
+export { TuiDashboardService, type DashboardGroup, type DashboardMetric } from './dashboard.ts';
 export { renderSkillInvocation } from './chat/skill-invocation.ts';
 export type { TuiResumeHost, TuiRuntime } from './runtime.ts';
 export { resolveTuiConfig, TuiConfigSchema, Config, type ResolvedTuiConfig, type ResolvedTuiThemeConfig, type TuiConfig, type TuiThemeConfig, } from './config.ts';

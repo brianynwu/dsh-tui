@@ -83,6 +83,7 @@ import {
   fadeGlyph,
   formatQueuedStatus,
   formatStatusDuration,
+  latestStep,
   openStepPhase,
   openTurn,
   pulseLevel,
@@ -92,6 +93,7 @@ import {
   StepTimingTracker,
   TIMING_BUCKET_GLYPHS,
   type StepPosition,
+  type TimingTotals,
 } from './chat/timing.ts'
 import {
   formatResumeHint,
@@ -148,8 +150,13 @@ import { createResumeController } from './chat/resume.ts'
 import { buildTuiLayout, freeEditorHomeEnd } from './chat/layout.ts'
 import type { TuiRuntime } from './runtime.ts'
 import { WorkspaceFileSearch } from './chat/file-autocomplete.ts'
+import { TuiDashboardService } from './dashboard.ts'
+import { DashboardPane } from './components/dashboard-pane.ts'
 
 export { TuiPromptService } from './prompt.ts'
+// The dashboard-pane seam: an out-of-fork producer (the Prong-2 orproxy
+// provider/cost bridge) imports these to publish a group into `ctx.dashboard`.
+export { TuiDashboardService, type DashboardGroup, type DashboardMetric } from './dashboard.ts'
 export { renderSkillInvocation } from './chat/skill-invocation.ts'
 export type { TuiResumeHost, TuiRuntime } from './runtime.ts'
 export {
@@ -339,6 +346,21 @@ export function createTuiChat(
   // One shared accumulator serves every step's timing footer; per-footer
   // replay of the whole log is quadratic on a long resumed session.
   const stepTimingTracker = new StepTimingTracker()
+  // Structured metric registry for the runtime dashboard pane (viability spike).
+  // In-fork groups are folded in by `updateDashboard` on the status cadence; the
+  // orproxy provider/cost bridge (Prong 2) publishes into the same service.
+  const dashboardService = new TuiDashboardService(ctx)
+  // Seed the Provider group ONCE, so the pane shows its column from the start,
+  // then never touch it again from here: it is owned by the out-of-fork orproxy
+  // bridge (Prong 2). Restamping it every tick would clobber that producer's
+  // published values with placeholders on the next repaint.
+  dashboardService.setGroup('provider', {
+    title: 'Provider',
+    metrics: [
+      { label: 'via', value: undefined },
+      { label: 'cost', value: undefined },
+    ],
+  })
   // Assistant step components in model order per turn, for hidden-mode folding:
   // with tool cards hidden, a turn keeps one Assistant header and later steps
   // render as headerless continuations (see applyTurnFolding).
@@ -416,6 +438,52 @@ export function createTuiChat(
     || contextValue === undefined || sessionValue === undefined || queuedValue === undefined || symbolValue === undefined || indicatorValue === undefined) {
     throw new Error('TUI prompt built-ins failed to initialize')
   }
+  // Fold the in-fork session metrics (timing / tokens / context) into the
+  // dashboard service. Everything here is already in-process from the session
+  // event stream — no middleware plugin. This never sets the Provider group: it
+  // is seeded once above and owned by the Prong-2 orproxy bridge.
+  const updateDashboard = (): void => {
+    const events = agent.session.events
+    const at = now()
+    // The latest step — live while running, the just-finished one once it closes
+    // — so the timing group holds final durations between steps instead of
+    // blanking. Read from the log, so a resumed all-complete log still shows it.
+    const position = latestStep(events)
+    const totals: TimingTotals | undefined = position === undefined
+      ? undefined
+      : stepTimingTracker.totalsAt(events, position, at)
+    const duration = (value: number | undefined): string | undefined =>
+      value === undefined ? undefined : palette.dim(formatStatusDuration(value))
+    dashboardService.setGroup('timing', {
+      title: 'Timing',
+      metrics: [
+        { label: 'wait', value: duration(totals?.ttft) },
+        { label: 'think', value: duration(totals?.thinking) },
+        { label: 'resp', value: duration(totals?.responding) },
+        { label: 'tools', value: duration(totals?.tools) },
+      ],
+    })
+    const rate = cacheHitRate(tokens)
+    dashboardService.setGroup('tokens', {
+      title: 'Tokens',
+      metrics: [
+        { label: '↑in', value: palette.dim(formatTokens(tokens.input)) },
+        { label: '↓out', value: palette.dim(formatTokens(tokens.output)) },
+        { label: 'cache', value: rate === undefined ? undefined : palette.dim(`${rate}%`) },
+      ],
+    })
+    const contextWindow = modelController.contextWindow()
+    const used = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
+    dashboardService.setGroup('context', {
+      title: 'Context',
+      metrics: contextWindow === undefined
+        ? [{ label: 'fill', value: undefined }]
+        : [
+          { label: 'fill', value: palette.dim(`${Math.min(100, Math.round((used / contextWindow) * 100))}%`) },
+          { label: 'used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
+        ],
+    })
+  }
   const updatePromptValues = (): void => {
     const renderTime = now()
     cwdValue.set(palette.bold(palette.accent(formattedCwd)))
@@ -470,7 +538,9 @@ export function createTuiChat(
         envelope.level >= 0.5,
       )
     indicatorValue.set(`${caret}${palette.dim(' ')}`)
+    updateDashboard()
   }
+  const dashboardPane = new DashboardPane(() => dashboardService.groups(), palette)
   const promptContext = new PromptContextComponent(
     parseTuiPromptTemplate(displayInlineText(resolved.theme.leftPrompt)),
     parseTuiPromptTemplate(displayInlineText(resolved.theme.rightPrompt)),
@@ -482,7 +552,7 @@ export function createTuiChat(
   // inline-modal mount / editor pinned below. chat stays transcript-only, so its
   // in-place children mutations keep their index meaning.
   const { root: layoutRoot } = buildTuiLayout({
-    header, chat, todoContainer, compactionStatusLine, promptContext, questionContainer, editor,
+    header, chat, todoContainer, compactionStatusLine, dashboard: dashboardPane, promptContext, questionContainer, editor,
   })
   ui.setLayoutRoot(layoutRoot)
   ui.setFocus(editor)
@@ -506,6 +576,12 @@ export function createTuiChat(
   // `${custom}` fragment) redraws through the registry's coalesced notification;
   // built-ins are already covered by the state-change callers of requestRender.
   const disposePromptChanges = ctx.tuiPrompt.subscribe(requestRender)
+  // An EXTERNAL producer (the orproxy provider/cost bridge, Prong 2) updates a
+  // dashboard group out of band; repaint only — never re-run the in-fork producer
+  // (`updateDashboard`), which would feed back into its own notification.
+  const disposeDashboardChanges = ctx.dashboard.subscribe(() => {
+    if (!disposed) ui.requestRender()
+  })
 
   const appendNotice = (message: string, kind: 'info' | 'warning' | 'error' = 'info'): void => {
     const color = kind === 'error' ? palette.error : kind === 'warning' ? palette.warning : palette.dim
@@ -1754,6 +1830,7 @@ export function createTuiChat(
     disposeCommandChanges()
     disposeSkillChanges()
     disposePromptChanges()
+    disposeDashboardChanges()
     for (const value of promptValues) value.dispose()
     stopBannerReveal()
     disposeSessionEvents()

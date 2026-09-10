@@ -36,6 +36,8 @@ export interface TuiLayoutParts {
     todoContainer: Component;
     /** Context-compaction status line; a scrollBody sibling of `chat`. */
     compactionStatusLine: Component;
+    /** Runtime metrics dashboard; pinned above the prompt line. */
+    dashboard: Component;
     /** The left/right prompt line; pinned above the editor. */
     promptContext: Component;
     /** Inline-modal / question mount point; pinned. */

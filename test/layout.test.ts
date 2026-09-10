@@ -33,6 +33,7 @@ function makeParts(): TuiLayoutParts {
     chat: new Lines(1, 'chat'),
     todoContainer: new Lines(1, 'todo'),
     compactionStatusLine: new Lines(1, 'compaction'),
+    dashboard: new Lines(1, 'dashboard'),
     promptContext: new Lines(1, 'prompt'),
     questionContainer: new Lines(0, 'question'),
     editor: new Lines(1, 'editor'),
@@ -54,7 +55,7 @@ describe('buildTuiLayout render-tree shape', () => {
     expect(scrollBody).toBeInstanceOf(VStack)
 
     const rootEntries = entries(root)
-    expect(rootEntries).toHaveLength(4)
+    expect(rootEntries).toHaveLength(5)
 
     // Entry 0 = the scroll region: the ONLY entry that grows and shrinks.
     expect(rootEntries[0].component).toBe(transcriptScroll)
@@ -62,11 +63,13 @@ describe('buildTuiLayout render-tree shape', () => {
     expect(rootEntries[0].shrink).toBe(1)
     expect(rootEntries[0].basis).toBe(0)
 
-    // Entries 1..3 = pinned: never grow, never shrink (B1: a long transcript
-    // can never clip the prompt/modal/editor).
-    expect(rootEntries[1].component).toBe(parts.promptContext)
-    expect(rootEntries[2].component).toBe(parts.questionContainer)
-    expect(rootEntries[3].component).toBe(parts.editor) // editor is last / at the bottom
+    // Entries 1..4 = pinned: never grow, never shrink (B1: a long transcript
+    // can never clip the dashboard/prompt/modal/editor). The dashboard sits just
+    // above the prompt line; the editor stays last / at the bottom.
+    expect(rootEntries[1].component).toBe(parts.dashboard)
+    expect(rootEntries[2].component).toBe(parts.promptContext)
+    expect(rootEntries[3].component).toBe(parts.questionContainer)
+    expect(rootEntries[4].component).toBe(parts.editor) // editor is last / at the bottom
     for (const e of rootEntries.slice(1)) {
       expect(e.grow).toBe(0)
       expect(e.shrink).toBe(0)
