@@ -87,11 +87,12 @@ const showHardwareCursorSchema = z.boolean().default(false)
 const colorSchema = z.boolean().default(true)
 // No default: an unset value auto-detects truecolor from COLORTERM in `apply`.
 const truecolorSchema = z.boolean()
-// The single status line above the editor: worktree branch plus the session-level
-// metrics (model, token meter, context%). CWD and Session ID moved to the runtime
-// dashboard pane's `meta` column; the `cwd`/`session` prompt values stay registered
-// so a custom `theme.leftPrompt` can still reference them.
-const DEFAULT_LEFT_PROMPT = '${git/worktree}${model}${token_meter/cache_hit_rate}${context}'
+// The single status line above the editor: worktree branch + the active model. The
+// runtime dashboard pane owns everything else — CWD/Session ID (its `meta` column) and
+// the token meter / cache rate / context% (its Tokens + Context groups) — so those are
+// NOT duplicated here. The `cwd`/`session`/`token_meter/cache_hit_rate`/`context` prompt
+// values stay registered so a custom `theme.leftPrompt` can still reference them.
+const DEFAULT_LEFT_PROMPT = '${git/worktree}${model}'
 const DEFAULT_RIGHT_PROMPT = '${queued}'
 const DEFAULT_INPUT_PROMPT = '${symbol} ${indicator}'
 const DEFAULT_INPUT_PLACEHOLDER = 'press enter to steer and esc to cancel'

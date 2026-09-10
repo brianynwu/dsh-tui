@@ -20,9 +20,9 @@ function valueNames(template: string): string[] {
 }
 
 describe('default status line composition', () => {
-  it('shows worktree + session-level metrics in the left prompt (cwd/session moved to the pane)', () => {
+  it('shows only worktree + model in the left prompt (all pane-duplicated metrics removed)', () => {
     expect(valueNames(resolveTuiConfig(undefined).theme.leftPrompt)).toEqual([
-      'git/worktree', 'model', 'token_meter/cache_hit_rate', 'context',
+      'git/worktree', 'model',
     ])
   })
 
