@@ -74,6 +74,7 @@ import { brandText, createPalette, markdownTheme, renderPalette, selectTheme } f
 import { contentText, parseArguments } from './components/content.ts'
 import {
   cacheHitRate,
+  formatContextLabel,
   formatTokens,
   recordEventUsage,
   sessionTokens,
@@ -404,14 +405,15 @@ export function createTuiChat(
     ctx.tuiPrompt.register('token_meter/cache_hit_rate'),
     ctx.tuiPrompt.register('model'),
     ctx.tuiPrompt.register('context'),
+    ctx.tuiPrompt.register('session'),
     ctx.tuiPrompt.register('queued'),
     ctx.tuiPrompt.register('symbol', palette.bold(palette.accent('dsh'))),
     ctx.tuiPrompt.register('indicator', palette.dim('> ')),
   ]
-  const [cwdValue, gitValue, tokenValue, modelValue, contextValue, queuedValue, symbolValue, indicatorValue] = promptValues
+  const [cwdValue, gitValue, tokenValue, modelValue, contextValue, sessionValue, queuedValue, symbolValue, indicatorValue] = promptValues
   /* v8 ignore next -- the fixed built-in registration list always supplies each handle. */
   if (cwdValue === undefined || gitValue === undefined || tokenValue === undefined || modelValue === undefined
-    || contextValue === undefined || queuedValue === undefined || symbolValue === undefined || indicatorValue === undefined) {
+    || contextValue === undefined || sessionValue === undefined || queuedValue === undefined || symbolValue === undefined || indicatorValue === undefined) {
     throw new Error('TUI prompt built-ins failed to initialize')
   }
   const updatePromptValues = (): void => {
@@ -423,9 +425,11 @@ export function createTuiChat(
     modelValue.set(`  ${palette.dim(displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current)))}`)
     tokenValue.set(`  ${palette.dim(rate === undefined ? usage : `${usage}  cache ${rate}%`)}`)
     const contextWindow = modelController.contextWindow()
-    contextValue.set(contextWindow === undefined ? undefined : `  ${palette.dim(
-      `${Math.min(100, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens / contextWindow * 100))}% context`,
-    )}`)
+    const usedContext = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
+    contextValue.set(contextWindow === undefined
+      ? undefined
+      : `  ${palette.dim(formatContextLabel(usedContext, contextWindow))}`)
+    sessionValue.set(`  ${palette.dim(displayText(agent.session.id))}`)
     const queued = runningStatus === undefined ? undefined : formatQueuedStatus(pendingSteering.size)
     queuedValue.set(queued === undefined ? undefined : palette.dim(queued))
     symbolValue.set(palette.bold(palette.accent('dsh')))

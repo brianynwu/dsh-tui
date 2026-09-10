@@ -52,4 +52,13 @@ export declare function sessionTokens(session: Session): SessionTokenTotals;
  * @returns The compact display string.
  */
 export declare function formatTokens(value: number): string;
+/**
+ * Format context-window usage for the status line: the fill percentage plus the
+ * used/total token breakdown, e.g. `45% context (59k/131k)`. Percent clamps to
+ * 100 so an over-window measurement never reads above full.
+ * @param usedTokens - Tokens the current request occupies (>= 0).
+ * @param contextWindow - The model's total context window in tokens (> 0).
+ * @returns The compact context-usage label.
+ */
+export declare function formatContextLabel(usedTokens: number, contextWindow: number): string;
 //# sourceMappingURL=tokens.d.ts.map

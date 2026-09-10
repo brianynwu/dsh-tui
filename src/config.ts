@@ -87,7 +87,9 @@ const showHardwareCursorSchema = z.boolean().default(false)
 const colorSchema = z.boolean().default(true)
 // No default: an unset value auto-detects truecolor from COLORTERM in `apply`.
 const truecolorSchema = z.boolean()
-const DEFAULT_LEFT_PROMPT = '${cwd}${git/worktree}${model}${token_meter/cache_hit_rate}${context}'
+// The single status line above the editor: editing context (cwd + worktree) plus
+// the session-level metrics (model, token meter, context%, session id).
+const DEFAULT_LEFT_PROMPT = '${cwd}${git/worktree}${model}${token_meter/cache_hit_rate}${context}${session}'
 const DEFAULT_RIGHT_PROMPT = '${queued}'
 const DEFAULT_INPUT_PROMPT = '${symbol} ${indicator}'
 const DEFAULT_INPUT_PLACEHOLDER = 'press enter to steer and esc to cancel'

@@ -94,3 +94,16 @@ export function formatTokens(value: number): string {
   if (value < 1_000_000) return `${Math.round(value / 1_000)}k`
   return `${(value / 1_000_000).toFixed(1)}m`
 }
+
+/**
+ * Format context-window usage for the status line: the fill percentage plus the
+ * used/total token breakdown, e.g. `45% context (59k/131k)`. Percent clamps to
+ * 100 so an over-window measurement never reads above full.
+ * @param usedTokens - Tokens the current request occupies (>= 0).
+ * @param contextWindow - The model's total context window in tokens (> 0).
+ * @returns The compact context-usage label.
+ */
+export function formatContextLabel(usedTokens: number, contextWindow: number): string {
+  const percent = Math.min(100, Math.round((usedTokens / contextWindow) * 100))
+  return `${percent}% context (${formatTokens(usedTokens)}/${formatTokens(contextWindow)})`
+}
