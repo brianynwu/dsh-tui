@@ -87,18 +87,23 @@ describe('DashboardPane render', () => {
     expect(body).toContain('CWD ~/x')
   })
 
-  it('colors a title-less group\'s labels with accent (like a header); titled groups keep dim labels', () => {
+  it('colors labels by group (accent when title-less, else dim), dims all values, and drops an empty label', () => {
     // A marking palette so accent vs dim is observable in the output text.
     const marking = new Proxy({}, {
       get: (_t, role) => (text: string) => role === 'accent' ? `A(${text})` : role === 'dim' ? `D(${text})` : text,
     }) as unknown as Palette
     const groups: DashboardGroup[] = [
       { title: 'Timing', metrics: [{ label: 'wait', value: '0.4s' }] },       // titled ⇒ dim label
+      { title: 'Context', metrics: [{ label: '', value: '7% (1k/2k)' }] },    // empty label ⇒ value only
       { title: '', metrics: [{ label: 'CWD', value: 'x' }] },                 // title-less ⇒ accent label
     ]
-    const body = new DashboardPane(() => groups, marking).render(60).join('\n')
-    expect(body).toContain('A(CWD)')   // title-less label rendered with accent
-    expect(body).toContain('D(wait)')  // titled group's label stays dim
+    const body = new DashboardPane(() => groups, marking).render(80).join('\n')
+    expect(body).toContain('A(CWD)')          // title-less label rendered with accent
+    expect(body).toContain('D(wait)')         // titled group's label stays dim
+    expect(body).toContain('D(0.4s)')         // value is dimmed by the pane
+    expect(body).toContain('D(x)')            // value under a title-less group is dimmed too
+    expect(body).toContain('D(7% (1k/2k))')   // empty-label row: value only, dimmed
+    expect(body).not.toContain('A()')         // no empty accent label emitted for the value-only row
   })
 
   it('stacks groups sharing a column key into ONE column, in insertion order', () => {

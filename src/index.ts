@@ -454,8 +454,11 @@ export function createTuiChat(
     const totals: TimingTotals | undefined = position === undefined
       ? undefined
       : stepTimingTracker.totalsAt(events, position, at)
+    // Values are PLAIN strings — the dashboard pane applies the recessed (dim) tone uniformly, so an
+    // out-of-fork producer (the orproxy bridge, which has no palette) renders identically. Labels/titles are
+    // colored by the pane too.
     const duration = (value: number | undefined): string | undefined =>
-      value === undefined ? undefined : palette.dim(formatStatusDuration(value))
+      value === undefined ? undefined : formatStatusDuration(value)
     dashboardService.setGroup('timing', {
       title: 'Timing',
       metrics: [
@@ -475,23 +478,22 @@ export function createTuiChat(
     dashboardService.setGroup('tokens', {
       title: 'Tokens',
       metrics: [
-        { label: '↑In', value: palette.dim(formatTokens(tokens.input)) },
-        { label: '↓Out', value: palette.dim(formatTokens(tokens.output)) },
-        { label: 'Cache', value: rate === undefined ? undefined : palette.dim(`${rate}%`) },
-        { label: 'TP', value: tps === undefined ? undefined : palette.dim(`${Math.round(tps)} tok/s`) },
+        { label: '↑In', value: formatTokens(tokens.input) },
+        { label: '↓Out', value: formatTokens(tokens.output) },
+        { label: 'Cache', value: rate === undefined ? undefined : `${rate}%` },
+        { label: 'TP', value: tps === undefined ? undefined : `${Math.round(tps)} tok/s` },
       ],
     })
     const contextWindow = modelController.contextWindow()
     const used = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
+    // One value-only row: `N% (used/total)`. The orproxy bridge stacks the Cost group below it.
+    const contextValue = contextWindow === undefined
+      ? undefined
+      : `${Math.min(100, Math.round((used / contextWindow) * 100))}% (${formatTokens(used)}/${formatTokens(contextWindow)})`
     dashboardService.setGroup('context', {
-      column: 'ctx',                              // the orproxy bridge stacks Cost below these rows
+      column: 'ctx',
       title: 'Context',
-      metrics: contextWindow === undefined
-        ? [{ label: 'Fill', value: undefined }]
-        : [
-          { label: 'Fill', value: palette.dim(`${Math.min(100, Math.round((used / contextWindow) * 100))}%`) },
-          { label: 'Used', value: palette.dim(`${formatTokens(used)}/${formatTokens(contextWindow)}`) },
-        ],
+      metrics: [{ label: '', value: contextValue }],
     })
     // The `meta` column: CWD, Branch, Session ID, Model (Model + Branch moved off
     // the status line). The out-of-fork bridge stacks Provider below these rows in
@@ -503,10 +505,10 @@ export function createTuiChat(
       column: 'meta',
       title: '',
       metrics: [
-        { label: 'CWD', value: palette.dim(formattedCwd) },
-        { label: 'Branch', value: branch === undefined ? undefined : palette.dim(displayText(branch)) },
-        { label: 'Session ID', value: palette.dim(displayText(agent.session.id)) },
-        { label: 'Model', value: palette.dim(displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current))) },
+        { label: 'CWD', value: formattedCwd },
+        { label: 'Branch', value: branch === undefined ? undefined : displayText(branch) },
+        { label: 'Session ID', value: displayText(agent.session.id) },
+        { label: 'Model', value: displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current)) },
       ],
     })
   }

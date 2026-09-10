@@ -27,11 +27,15 @@ function padVisible(text: string, width: number): string {
 
 /** Render one group's lines: a title line (omitted when the title is empty) over `label value` rows. */
 function groupLines(group: DashboardGroup, palette: Palette): string[] {
-  // A title-less group has no header, so its metric LABELS carry the column's identity —
-  // render them in the accent color (matching the titled groups' headers). Titled groups
-  // keep dim labels beneath their accent header.
+  // The pane owns ALL coloring so producers pass plain strings (a cross-process producer like the orproxy
+  // bridge has no palette): values render in the recessed `dim` tone; a title-less group's LABELS carry the
+  // column's identity so they take the `accent` color (like a header), while a titled group's labels stay dim
+  // beneath its accent header. A metric with an empty label renders the value alone (no label, no gap).
   const labelColor = group.title === '' ? palette.accent : palette.dim
-  const rows = group.metrics.map(m => `${labelColor(m.label)} ${m.value ?? palette.dim('—')}`)
+  const rows = group.metrics.map(m => {
+    const value = m.value === undefined ? palette.dim('—') : palette.dim(m.value)
+    return m.label === '' ? value : `${labelColor(m.label)} ${value}`
+  })
   return group.title === '' ? rows : [palette.bold(palette.accent(group.title)), ...rows]
 }
 
