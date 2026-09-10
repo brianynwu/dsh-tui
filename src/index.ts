@@ -350,17 +350,10 @@ export function createTuiChat(
   // In-fork groups are folded in by `updateDashboard` on the status cadence; the
   // orproxy provider/cost bridge (Prong 2) publishes into the same service.
   const dashboardService = new TuiDashboardService(ctx)
-  // Seed the Provider group ONCE, so the pane shows its column from the start,
-  // then never touch it again from here: it is owned by the out-of-fork orproxy
-  // bridge (Prong 2). Restamping it every tick would clobber that producer's
-  // published values with placeholders on the next repaint.
-  dashboardService.setGroup('provider', {
-    title: 'Provider',
-    metrics: [
-      { label: 'via', value: undefined },
-      { label: 'cost', value: undefined },
-    ],
-  })
+  // The Provider group is intentionally NOT seeded here: it has no in-fork source, so a stock TUI shows only
+  // the in-fork Timing/Tokens/Context columns (no empty placeholder). An out-of-fork producer — the Olympus
+  // orproxy provider/cost bridge — owns it entirely, publishing through this same public service; because it
+  // sets the group only after the in-fork groups exist, its Provider column renders last (rightmost).
   // Assistant step components in model order per turn, for hidden-mode folding:
   // with tool cards hidden, a turn keeps one Assistant header and later steps
   // render as headerless continuations (see applyTurnFolding).
@@ -441,7 +434,7 @@ export function createTuiChat(
   // Fold the in-fork session metrics (timing / tokens / context) into the
   // dashboard service. Everything here is already in-process from the session
   // event stream — no middleware plugin. This never sets the Provider group: it
-  // is seeded once above and owned by the Prong-2 orproxy bridge.
+  // has no in-fork source and is owned entirely by the out-of-fork provider bridge.
   const updateDashboard = (): void => {
     const events = agent.session.events
     const at = now()
