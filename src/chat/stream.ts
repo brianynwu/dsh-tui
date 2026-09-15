@@ -46,6 +46,12 @@ interface LiveAttempt {
  */
 export class LiveStreamController {
   private live: LiveAttempt | undefined
+  // Highest revision ever begun. Revisions are monotone within one attached
+  // Agent lifecycle, so a start at or below the mark is a stale or duplicate
+  // frame; it must not retract the current render or resurrect a finished
+  // attempt. Deliberately survives reset() so a completed attempt's late start
+  // stays ignored.
+  private maxRevision = 0
 
   /**
    * Classify one frame, updating the tracked live attempt as a side effect.
@@ -55,7 +61,10 @@ export class LiveStreamController {
   frame(frame: AssistantStreamFrame): StreamFrameAction {
     switch (frame.type) {
       case 'start': {
-        // A start for a different attempt/revision supersedes any partial render.
+        // Ignore a stale/duplicate start (revision not beyond the high-water mark).
+        if (frame.revision <= this.maxRevision) return { kind: 'ignore' }
+        this.maxRevision = frame.revision
+        // A start for a different attempt supersedes any partial render still open.
         const superseded = this.live !== undefined && !this.isLive(frame)
         this.live = {
           attemptId: frame.attemptId,

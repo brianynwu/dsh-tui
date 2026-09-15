@@ -151,6 +151,10 @@ export async function resolveRows(
   records: readonly SessionRecord[],
   signal: AbortSignal,
 ): Promise<ResumeRowMeta[]> {
+  // Without the projection cache (a rare fallback — the TUI profile mounts it),
+  // titles come from one batch read and each not-live row then also reads its log
+  // tail for the activity time: two reads per row. Accepted for the fallback; the
+  // cache path (the norm) reads each log exactly once for both title and activity.
   const batch = deps.cacheTitle === undefined
     ? await deps.batchTitles(records, signal)
     : undefined

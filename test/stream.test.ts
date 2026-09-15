@@ -45,10 +45,11 @@ describe('LiveStreamController', () => {
     expect(c.frame(chunk('a1', 1, textDelta('stale')))).toEqual({ kind: 'ignore' })
   })
 
-  it('marks a start for a different attempt as superseding the open one', () => {
+  it('marks a start for a newer attempt as superseding the open one', () => {
     const c = new LiveStreamController()
     c.frame(start('a1', 1))
-    expect(c.frame(start('a2', 1))).toEqual({ kind: 'begin', position: { turn: 1, step: 0 }, superseded: true })
+    // A replacement attempt carries a higher (monotone) revision.
+    expect(c.frame(start('a2', 2))).toEqual({ kind: 'begin', position: { turn: 1, step: 0 }, superseded: true })
   })
 
   it('a stale end neither retracts nor clears the live attempt', () => {
@@ -92,5 +93,29 @@ describe('LiveStreamController', () => {
     c.frame(start('a1', 1))
     c.reset()
     expect(c.frame(chunk('a1', 1, textDelta('x')))).toEqual({ kind: 'ignore' })
+  })
+
+  it('ignores a stale (older-revision) start and keeps rendering the current attempt', () => {
+    const c = new LiveStreamController()
+    c.frame(start('a2', 2))
+    // a delayed start from an earlier attempt must not supersede/retract...
+    expect(c.frame(start('a1', 1))).toEqual({ kind: 'ignore' })
+    // ...and the current attempt's chunk still renders.
+    expect(c.frame(chunk('a2', 2, textDelta('live'), 4))).toMatchObject({ kind: 'chunk' })
+  })
+
+  it('ignores a duplicate start (same revision re-delivered)', () => {
+    const c = new LiveStreamController()
+    c.frame(start('a1', 1))
+    expect(c.frame(start('a1', 1))).toEqual({ kind: 'ignore' })
+  })
+
+  it('does not resurrect a completed attempt from a late start after reset', () => {
+    const c = new LiveStreamController()
+    c.frame(start('a1', 1))
+    c.frame(end('a1', 1, { kind: 'committed', eventType: 'assistant/message', seq: 1 }))
+    c.reset()
+    // a late re-delivery of the finished attempt's start is stale (revision <= mark).
+    expect(c.frame(start('a1', 1))).toEqual({ kind: 'ignore' })
   })
 })

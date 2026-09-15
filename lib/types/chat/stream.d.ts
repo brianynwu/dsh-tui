@@ -49,6 +49,7 @@ export type StreamFrameAction =
  */
 export declare class LiveStreamController {
     private live;
+    private maxRevision;
     /**
      * Classify one frame, updating the tracked live attempt as a side effect.
      * @param frame - one assistant-stream frame.
