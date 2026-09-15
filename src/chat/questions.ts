@@ -127,33 +127,34 @@ export function createQuestionQueue(deps: QuestionQueueDeps): QuestionQueue {
     show()
   }
 
-  const unregister = ctx.userQuestions.registerProvider({
-    ask(request) {
-      return new Promise<AskUserQuestionAnswer>((resolveAnswer, reject) => {
-        const pending: PendingQuestion = {
-          request,
-          index: 0,
-          answers: [],
-          resolve: resolveAnswer,
-          reject,
-          overlay: undefined,
-          onAbort: () => {
-            if (activeQuestion === pending) {
-              activeQuestion = undefined
-              rejectQuestion(pending)
-              startNextQuestion()
-              return
-            }
-            // A non-active pending ask remains in the queue until this listener settles it.
-            questionQueue.splice(questionQueue.indexOf(pending), 1)
+  // Register on the scoped answerer waterfall. Returning the answer promise
+  // CLAIMS the request; this front door never delegates to `next`. `ctx.on`
+  // returns the disposer the channel calls at shutdown.
+  const unregister = ctx.on('user-questions/request', (request, _next) => {
+    return new Promise<AskUserQuestionAnswer>((resolveAnswer, reject) => {
+      const pending: PendingQuestion = {
+        request,
+        index: 0,
+        answers: [],
+        resolve: resolveAnswer,
+        reject,
+        overlay: undefined,
+        onAbort: () => {
+          if (activeQuestion === pending) {
+            activeQuestion = undefined
             rejectQuestion(pending)
-          },
-        }
-        request.signal?.addEventListener('abort', pending.onAbort, { once: true })
-        questionQueue.push(pending)
-        startNextQuestion()
-      })
-    },
+            startNextQuestion()
+            return
+          }
+          // A non-active pending ask remains in the queue until this listener settles it.
+          questionQueue.splice(questionQueue.indexOf(pending), 1)
+          rejectQuestion(pending)
+        },
+      }
+      request.signal?.addEventListener('abort', pending.onAbort, { once: true })
+      questionQueue.push(pending)
+      startNextQuestion()
+    })
   })
 
   return {
