@@ -884,6 +884,17 @@ export function createTuiChat(
     chat.addChild(streaming.timing)
   }
 
+  // Create the step's component only if one is not already open for it.
+  // Idempotent across the two channels that can open it: the durable `step/start`
+  // event and a `begin` stream frame can arrive in either order, so neither must
+  // orphan a component the other already created.
+  const ensureAssistantStep = (position: StepPosition): void => {
+    if (streaming === undefined || streaming.isSettled() || !chat.children.includes(streaming)
+      || streaming.position.turn !== position.turn || streaming.position.step !== position.step) {
+      startAssistantStep(position)
+    }
+  }
+
   // Live incremental rendering. V3 no longer logs per-chunk `assistant/chunk`
   // events (the stream is embedded in the settled assistant/message|attempt), so
   // token-by-token deltas arrive on the ephemeral, agent-scoped
@@ -896,11 +907,9 @@ export function createTuiChat(
       case 'begin':
         // Drop a superseded attempt's partial render before the new one starts.
         if (action.superseded) retractFailedStreaming()
-        // step/start (durable) normally created the component; create one only
+        // step/start (durable) normally created the component; ensure one exists
         // if this frame outran its step/start or follows a retract.
-        if (streaming === undefined || streaming.isSettled() || !chat.children.includes(streaming)) {
-          startAssistantStep(action.position)
-        }
+        ensureAssistantStep(action.position)
         livePhase.begin()
         requestRender()
         break
@@ -994,7 +1003,7 @@ export function createTuiChat(
         break
       }
       case 'step/start':
-        startAssistantStep(event.data)
+        ensureAssistantStep(event.data)
         break
       case 'assistant/attempt':
         // A committed-but-messageless attempt (failed / retried / cancelled /
@@ -1031,6 +1040,8 @@ export function createTuiChat(
       case 'tool/call':
         chat.addChild(parsedTool(event))
         trailStreamingTiming()
+        // A live tool/call has no stream chunk; move the glyph to the tools phase.
+        livePhase.tools()
         break
       case 'tool/result': {
         const callId = event.data.message.source.callId

@@ -121,6 +121,12 @@ export declare class LiveStepPhase {
      * @param chunk - one model stream chunk.
      */
     observe(time: number, chunk: StreamChunk): void;
+    /**
+     * Enter the tool-execution phase for a live `tool/call` (a durable event with
+     * no stream chunk of its own). Starts the phase if a tool runs before any
+     * stream frame arrived, so the glyph reads `tools` throughout tool execution.
+     */
+    tools(): void;
     /** Clear the live phase when the step ends or the attempt is abandoned. */
     reset(): void;
     /** The open step's active bucket, or `undefined` when none is streaming. */

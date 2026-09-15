@@ -114,4 +114,12 @@ describe('LiveStepPhase (glyph phase fed by frames)', () => {
     phase.reset()
     expect(phase.phase()).toBeUndefined()
   })
+
+  it('enters the tools phase on a live tool/call, even before any stream frame', () => {
+    const phase = new LiveStepPhase()
+    phase.tools() // a tool-only step: no begin/observe yet
+    expect(phase.phase()).toBe('tools')
+    phase.reset()
+    expect(phase.phase()).toBeUndefined()
+  })
 })

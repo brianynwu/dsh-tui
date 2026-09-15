@@ -145,8 +145,7 @@
     "@deepseek-ai/dsh-util-values": "0.1.5-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2",
     "@deepseek-ai/dsh-settings": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-tool-todo": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-session-format-catalog": "0.1.5-rc.2"
+    "@deepseek-ai/dsh-tool-todo": "0.1.5-rc.2"
   },
   "overrides": {
     "@deepseek-ai/dsh-agent": "0.1.5-rc.2",
@@ -182,7 +181,6 @@
     "@deepseek-ai/dsh-util-values": "0.1.5-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2",
     "@deepseek-ai/dsh-settings": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-tool-todo": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-session-format-catalog": "0.1.5-rc.2"
+    "@deepseek-ai/dsh-tool-todo": "0.1.5-rc.2"
   }
 }

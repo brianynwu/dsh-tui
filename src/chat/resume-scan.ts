@@ -158,6 +158,9 @@ export async function resolveRows(
   let cursor = 0
   const worker = async (): Promise<void> => {
     for (;;) {
+      // Stop issuing reads once the scan is aborted; the consumer rechecks
+      // staleness before using the (now partial) result.
+      if (signal.aborted) return
       const index = cursor
       if (index >= records.length) return
       cursor += 1

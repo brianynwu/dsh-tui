@@ -286,9 +286,11 @@ export function createResumeController(deps: ResumeControllerDeps): ResumeContro
         // title fold needs the full log). A corrupt neighbor degrades to one
         // disabled row.
         const rows = await resolveRows(scanDeps(listQuery), records, scanAbort.signal)
+        // A scan aborted during the per-row reads must not overwrite newer picker state.
+        if (scanStale()) return
         const candidates = records.map((record, index) => {
           const row = rows[index] as ResumeRowMeta
-          return row.failure !== undefined
+          return 'failure' in row
             ? unreadableCandidate(record, row.lastActivityAt, row.failure)
             : summarize(record, row.title, row.lastActivityAt)
         })
