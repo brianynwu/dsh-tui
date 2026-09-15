@@ -6,6 +6,7 @@
  * @module @deepseek-ai/dsh-tui/chat/timing
  */
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
+import { type StreamChunk, type TimedStreamChunk } from '@deepseek-ai/dsh-llm';
 import type { Palette } from '../components/theme.ts';
 /**
  * Render cadence of the status prompt while active, and while the glyph fades
@@ -44,6 +45,15 @@ export interface TimingTotals {
     tools: number;
 }
 /**
+ * Per-phase totals for one attempt's stream between a step-start and a step-end
+ * clock. Pure entry point for tests and callers that hold a single stream.
+ * @param startTime - the step's start timestamp (opens the model-wait bucket).
+ * @param chunks - the attempt's timed chunks.
+ * @param endTime - the clock the open bucket accumulates up to.
+ * @returns the per-phase totals.
+ */
+export declare function streamTimingTotals(startTime: number, chunks: readonly TimedStreamChunk[], endTime: number): TimingTotals;
+/**
  * Incremental per-step timing accumulator shared by every step's timing footer
  * in one transcript. One forward pass over the append-only session log serves
  * all steps' totals: each query advances a cursor over the events appended
@@ -78,7 +88,7 @@ export declare class StepTimingTracker {
 export declare function openTurn(events: readonly SessionEvent[]): number | undefined;
 /**
  * Turn/step coordinates of the most recent step — open or already closed — or
- * `undefined` when the log holds no step. Unlike {@link openStepPhase}, which
+ * `undefined` when the log holds no step. Unlike the live phase tracker, which
  * stops at a `step/end`/`turn/end`, this returns the last `step/start` in the
  * log regardless, so it feeds {@link StepTimingTracker.totalsAt} the step whose
  * durations to show: the live one while a step runs, and the just-finished one's
@@ -95,24 +105,38 @@ export declare function latestStep(events: readonly SessionEvent[]): StepPositio
  */
 export declare const TIMING_BUCKET_GLYPHS: Record<TimingBucket, string>;
 /**
- * Derive the currently open step's active timing bucket, or `undefined` when no
- * step is open. The open step is the last `step/start` with no later matching
- * `step/end`; its bucket is replayed with the same rules as {@link StepTimingTracker}.
- * @param events - Session events to scan.
- * @returns The open step's active bucket, or `undefined`.
+ * Live per-step phase tracker fed by `agent/assistant-stream` frames. In the V3
+ * format the open step's chunks are not in the session log while it streams (the
+ * attempt commits one embedded stream at `step/end`), so the live status glyph
+ * derives its phase from the frames as they arrive rather than by scanning the
+ * log. Durations are not accumulated here — only the active bucket is reported.
  */
-export declare function openStepPhase(events: readonly SessionEvent[]): TimingBucket | undefined;
+export declare class LiveStepPhase {
+    private state;
+    /** Begin a fresh step: model-wait until the first observed chunk. */
+    begin(): void;
+    /**
+     * Fold one live stream chunk into the open step's phase.
+     * @param time - the frame's chunk timestamp.
+     * @param chunk - one model stream chunk.
+     */
+    observe(time: number, chunk: StreamChunk): void;
+    /** Clear the live phase when the step ends or the attempt is abandoned. */
+    reset(): void;
+    /** The open step's active bucket, or `undefined` when none is streaming. */
+    phase(): TimingBucket | undefined;
+}
 /**
  * The active status glyph, or `undefined` when idle. A running turn takes
  * precedence over standalone compaction and falls back to the pre-first-token
- * wait when no step is open. The caller applies the shared fade and throb
- * animation (see {@link fadeGlyph}).
- * @param events - Session events to derive the phase from.
+ * wait before the first frame arrives. The caller applies the shared fade and
+ * throb animation (see {@link fadeGlyph}).
+ * @param livePhase - the live phase tracker fed by assistant-stream frames.
  * @param running - Whether the agent is currently running.
  * @param compacting - Whether a live standalone compaction bracket is open.
  * @returns The active status glyph, or `undefined` when idle.
  */
-export declare function runningPhaseGlyph(events: readonly SessionEvent[], running: boolean, compacting: boolean): string | undefined;
+export declare function runningPhaseGlyph(livePhase: LiveStepPhase, running: boolean, compacting: boolean): string | undefined;
 /**
  * The status throb's brightness at continuous clock `nowMs`: a cosine between
  * {@link STATUS_PULSE_FLOOR} and 1 over {@link STATUS_PULSE_PERIOD_MS}, so the

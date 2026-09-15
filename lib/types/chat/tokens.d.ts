@@ -3,7 +3,7 @@
  * turn/step so replayed or re-emitted usage replaces rather than double-counts.
  * @module @deepseek-ai/dsh-tui/chat/tokens
  */
-import type { TokenUsage } from '@deepseek-ai/dsh-llm';
+import { type TokenUsage } from '@deepseek-ai/dsh-llm';
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session';
 /**
  * Running token totals for the footer, keyed per turn/step so replayed or
@@ -27,7 +27,10 @@ export interface SessionTokenTotals {
  */
 export declare function recordTokenUsage(totals: SessionTokenTotals, turn: number, step: number, usage: TokenUsage): void;
 /**
- * Fold a usage-bearing session event into the running totals.
+ * Fold a usage-bearing session event into the running totals. An
+ * `assistant/message` prefers its own `usage` field and falls back to the
+ * stream's final usage chunk (never both, so a step is counted once); an
+ * `assistant/attempt` (no surface message) reads usage from its stream.
  * @param totals - Running totals mutated in place.
  * @param event - Session event; ignored when it carries no usage.
  */
