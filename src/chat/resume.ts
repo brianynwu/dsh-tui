@@ -106,7 +106,7 @@ export function createResumeController(deps: ResumeControllerDeps): ResumeContro
    */
   const lastActivityAt = async (record: SessionRecord): Promise<number | undefined> => {
     const live = ctx.sessions.get(record.header.id)
-    if (live !== undefined) return live.events.at(-1)?.time
+    if (live !== undefined) return live.snapshotEvents().at(-1)?.time
     const location = ctx.get('sessionPersistence')?.locate(record.header)
     if (location === undefined) return undefined
     try {

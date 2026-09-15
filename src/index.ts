@@ -35,6 +35,7 @@ import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-llm-retry'
+import type {} from '@deepseek-ai/dsh-tool-todo'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import {
   isReplacementSurfaceEvent,
@@ -406,7 +407,7 @@ export function createTuiChat(
 
   // A configured subtitle renders as a banner line; when absent, the banner has
   // no subtitle. The banner itself sweeps in on start (see startBannerReveal).
-  let sessionTitle = foldSessionTitle(agent.session.events)?.title
+  let sessionTitle = foldSessionTitle(agent.session.snapshotEvents())?.title
   const header = new HeaderComponent(
     agent,
     () => sessionTitle ?? config.welcome,
@@ -445,7 +446,7 @@ export function createTuiChat(
   // Provider renders below Model and Cost below fill/used, with no cross-producer
   // ordering API. `meta` renders rightmost.
   const updateDashboard = (): void => {
-    const events = agent.session.events
+    const events = agent.session.snapshotEvents()
     const at = now()
     // The latest step — live while running, the just-finished one once it closes
     // — so the timing group holds final durations between steps instead of
@@ -538,7 +539,7 @@ export function createTuiChat(
     // and fading out after it ends before the plain `>` returns. Only the gray
     // brightness changes, so the cursor never shifts.
     const statusGlyph = runningPhaseGlyph(
-      agent.session.events,
+      agent.session.snapshotEvents(),
       runningStatus !== undefined,
       compacting !== undefined,
     )
@@ -741,13 +742,13 @@ export function createTuiChat(
     editor.borderColor = status === 'running' ? text => palette.accent(text) : text => palette.dim(text)
     editor.hint = status === 'running' ? palette.dim(displayInlineText(resolved.theme.inputPlaceholder)) : undefined
     if (status === 'running') {
-      const turn = priorTurn ?? openTurn(agent.session.events)
+      const turn = priorTurn ?? openTurn(agent.session.snapshotEvents())
       const running: RunningStatus = {
         turn,
         startedAt: now(),
         // Seed with the current phase (ttft before the first step opens) so the
         // fade-out always has a glyph, even for a turn that ends before a render.
-        lastGlyph: TIMING_BUCKET_GLYPHS[openStepPhase(agent.session.events) ?? 'ttft'],
+        lastGlyph: TIMING_BUCKET_GLYPHS[openStepPhase(agent.session.snapshotEvents()) ?? 'ttft'],
         // Refresh every tick so the fading prompt phase glyph animates even
         // before the first token, when no streaming component exists yet.
         timer: setInterval(renderStatus, STATUS_ANIMATION_INTERVAL_MS),
@@ -856,7 +857,7 @@ export function createTuiChat(
   const startAssistantStep = (position: StepPosition): void => {
     streaming = new StreamingAssistantComponent(
       position,
-      () => agent.session.events,
+      () => agent.session.snapshotEvents(),
       stepTimingTracker,
       now,
       showReasoning,
@@ -1083,7 +1084,7 @@ export function createTuiChat(
     streaming = undefined
     todo.update([])
     const transcriptCalls = transcriptToolCallIds(agent.session)
-    for (const event of agent.session.events) {
+    for (const event of agent.session.snapshotEvents()) {
       if (isReplacementSurfaceEvent(event)) {
         if (isCompactCheckpoint(event)) renderCompactionMarker()
         continue
@@ -1320,7 +1321,7 @@ export function createTuiChat(
     /* v8 ignore next -- SystemPrompt always emits at least its required base section. */
     const systemPrompt = displayText(renderPrompt(assembly)) || '(empty)'
     const registeredTools = assembly.tools.map(tool => displayText(tool.name)).join(', ') || '(none)'
-    const events = agent.session.events
+    const events = agent.session.snapshotEvents()
     const latestActivity = lastActivityTime(events) ?? agent.session.header.createdAt
     const usedContext = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
     let context = `${formatDiagnosticNumber(usedContext)} used · capacity unknown`
@@ -1790,7 +1791,7 @@ export function createTuiChat(
       return
     }
     if (event.type === 'compaction/end' && event.data.turn === null && compacting !== undefined) {
-      const fadeOutGlyph = runningPhaseGlyph(agent.session.events, false, true)
+      const fadeOutGlyph = runningPhaseGlyph(agent.session.snapshotEvents(), false, true)
       clearInterval(compacting.timer)
       compacting = undefined
       if (event.data.error !== undefined) {
@@ -1900,7 +1901,7 @@ export function createTuiChat(
   }
 
   rebuildTranscript(true)
-  const restoredGoal = foldGoal(agent.session.events).goal
+  const restoredGoal = foldGoal(agent.session.snapshotEvents()).goal
   /* v8 ignore next -- goal replay coverage lives with the goal seam; the TUI only formats its startup notice. */
   if (restoredGoal !== undefined && restoredGoal.phase !== 'complete') {
     appendNotice(
