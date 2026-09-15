@@ -26,6 +26,7 @@ import {
   assembleContextFor,
   installModelSelection,
   type Agent,
+  type AssistantStreamFrame,
   type ModelSelectionRef,
   type AgentStatus,
 } from '@deepseek-ai/dsh-agent'
@@ -86,7 +87,7 @@ import {
   formatQueuedStatus,
   formatStatusDuration,
   latestStep,
-  openStepPhase,
+  LiveStepPhase,
   openTurn,
   pulseLevel,
   runningPhaseGlyph,
@@ -97,6 +98,7 @@ import {
   type StepPosition,
   type TimingTotals,
 } from './chat/timing.ts'
+import { LiveStreamController } from './chat/stream.ts'
 import {
   formatResumeHint,
   resolveTuiConfig,
@@ -345,6 +347,13 @@ export function createTuiChat(
   let toolsVisibility: ToolCardVisibility = 'collapsed'
   let streaming: StreamingAssistantComponent | undefined
   let completedStreaming: StreamingAssistantComponent | undefined
+  // Live per-step phase for the status glyph, fed by `agent/assistant-stream`
+  // frames: the open step's chunks are no longer in the durable log (V3 embeds
+  // the whole stream in the settled event), so the log cannot derive the phase.
+  const livePhase = new LiveStepPhase()
+  // Classifies live assistant-stream frames and rejects a stale/superseded one
+  // (delayed, or from a replaced attempt) so it cannot corrupt the live render.
+  const liveStream = new LiveStreamController()
   // One shared accumulator serves every step's timing footer; per-footer
   // replay of the whole log is quadratic on a long resumed session.
   const stepTimingTracker = new StepTimingTracker()
@@ -539,7 +548,7 @@ export function createTuiChat(
     // and fading out after it ends before the plain `>` returns. Only the gray
     // brightness changes, so the cursor never shifts.
     const statusGlyph = runningPhaseGlyph(
-      agent.session.snapshotEvents(),
+      livePhase,
       runningStatus !== undefined,
       compacting !== undefined,
     )
@@ -748,7 +757,7 @@ export function createTuiChat(
         startedAt: now(),
         // Seed with the current phase (ttft before the first step opens) so the
         // fade-out always has a glyph, even for a turn that ends before a render.
-        lastGlyph: TIMING_BUCKET_GLYPHS[openStepPhase(agent.session.snapshotEvents()) ?? 'ttft'],
+        lastGlyph: TIMING_BUCKET_GLYPHS[livePhase.phase() ?? 'ttft'],
         // Refresh every tick so the fading prompt phase glyph animates even
         // before the first token, when no streaming component exists yet.
         timer: setInterval(renderStatus, STATUS_ANIMATION_INTERVAL_MS),
@@ -846,12 +855,18 @@ export function createTuiChat(
   const clearStreaming = (): void => {
     removeStreaming(streaming)
     streaming = undefined
+    liveStream.reset()
+    livePhase.reset()
   }
 
+  // Drop a partial live render (a superseded, retried, or abandoned attempt).
+  // Does NOT reset `liveStream`: the superseding `begin` has already set the new
+  // live attempt, and an `end`/`step/end` clears tracking on the normal path.
   const retractFailedStreaming = (): void => {
     removeStreaming(streaming ?? completedStreaming)
     streaming = undefined
     completedStreaming = undefined
+    livePhase.reset()
   }
 
   const startAssistantStep = (position: StepPosition): void => {
@@ -869,6 +884,46 @@ export function createTuiChat(
     chat.addChild(streaming.timing)
   }
 
+  // Live incremental rendering. V3 no longer logs per-chunk `assistant/chunk`
+  // events (the stream is embedded in the settled assistant/message|attempt), so
+  // token-by-token deltas arrive on the ephemeral, agent-scoped
+  // `agent/assistant-stream` channel. `session/event` still delivers the durable
+  // events that settle (assistant/message) or drop (assistant/attempt) the step.
+  // `liveStream` guards frame identity; this glue applies its decision.
+  const onStreamFrame = (frame: AssistantStreamFrame): void => {
+    const action = liveStream.frame(frame)
+    switch (action.kind) {
+      case 'begin':
+        // Drop a superseded attempt's partial render before the new one starts.
+        if (action.superseded) retractFailedStreaming()
+        // step/start (durable) normally created the component; create one only
+        // if this frame outran its step/start or follows a retract.
+        if (streaming === undefined || streaming.isSettled() || !chat.children.includes(streaming)) {
+          startAssistantStep(action.position)
+        }
+        livePhase.begin()
+        requestRender()
+        break
+      case 'chunk':
+        /* v8 ignore next -- a begin always precedes a live chunk, so the component exists. */
+        if (streaming === undefined) break
+        streaming.update(action.chunk)
+        applyTurnFolding(action.position.turn)
+        livePhase.observe(action.time, action.chunk)
+        requestRender()
+        break
+      case 'end':
+        // A committed assistant/message settles via its durable event; only an
+        // abandoned attempt or a messageless commit drops the partial render.
+        if (action.retract) retractFailedStreaming()
+        livePhase.reset()
+        requestRender()
+        break
+      case 'ignore':
+        break
+    }
+  }
+
   // Steering is no longer a dedicated event type: `agent/inbox/spliced`
   // events identify which `user/message` was claimed from the next-step
   // inbox, so the fold must see every event in order.
@@ -877,7 +932,6 @@ export function createTuiChat(
     event: SessionEvent,
     options: {
       addHistory: boolean
-      renderChunks: boolean
     },
   ): void => {
     const isSteering = steeringHistory.apply(event)
@@ -942,12 +996,15 @@ export function createTuiChat(
       case 'step/start':
         startAssistantStep(event.data)
         break
-      case 'assistant/chunk':
-        if (options.renderChunks && streaming !== undefined) {
-          streaming.update(event.data.chunk)
-          // The first streamed text/reasoning may make this step the turn's
-          // hidden-mode header owner (or a continuation with a visible body).
-          applyTurnFolding(streaming.position.turn)
+      case 'assistant/attempt':
+        // A committed-but-messageless attempt (failed / retried / cancelled /
+        // stream-error). Its timing and usage are folded by the tracker and the
+        // token accounting; here, drop any partial live render still open for
+        // this step so the retry (or final message) starts clean. Replay hits
+        // this too: the following assistant/message re-creates the component.
+        if (streaming !== undefined && !streaming.isSettled()
+          && streaming.position.turn === event.data.turn && streaming.position.step === event.data.step) {
+          retractFailedStreaming()
         }
         break
       case 'assistant/message':
@@ -1014,6 +1071,10 @@ export function createTuiChat(
         streaming?.complete(event.time)
         completedStreaming = streaming
         streaming = undefined
+        // The step's live attempt is over; the glyph falls back to model-wait
+        // until the next step's frames arrive.
+        liveStream.reset()
+        livePhase.reset()
         break
       // Every turn/end kind presents why the agent stopped: `completed` is
       // presented by the settled assistant message and its Completed timing
@@ -1090,7 +1151,7 @@ export function createTuiChat(
         continue
       }
       if (event.type === 'tool/call' && !transcriptCalls.has(event.data.callId)) continue
-      renderEvent(event, { addHistory: populateHistory, renderChunks: false })
+      renderEvent(event, { addHistory: populateHistory })
     }
     requestRender()
   }
@@ -1791,7 +1852,7 @@ export function createTuiChat(
       return
     }
     if (event.type === 'compaction/end' && event.data.turn === null && compacting !== undefined) {
-      const fadeOutGlyph = runningPhaseGlyph(agent.session.snapshotEvents(), false, true)
+      const fadeOutGlyph = runningPhaseGlyph(livePhase, false, true)
       clearInterval(compacting.timer)
       compacting = undefined
       if (event.data.error !== undefined) {
@@ -1810,8 +1871,12 @@ export function createTuiChat(
       requestRender()
       return
     }
-    renderEvent(event, { addHistory: false, renderChunks: true })
+    renderEvent(event, { addHistory: false })
     requestRender()
+  })
+  const disposeAssistantStream = ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+    if (subject !== agent) return
+    onStreamFrame(frame)
   })
   const settlePendingSteering = (id: MessageId): void => {
     if (pendingSteering.delete(id)) refreshStatus()
@@ -1863,6 +1928,7 @@ export function createTuiChat(
     for (const value of promptValues) value.dispose()
     stopBannerReveal()
     disposeSessionEvents()
+    disposeAssistantStream()
     disposeDequeued()
     disposeDiscarded()
     disposeStatus()

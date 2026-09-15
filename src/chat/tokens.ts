@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-tui/chat/tokens
  */
 
-import type { TokenUsage } from '@deepseek-ai/dsh-llm'
+import { assistantStreamChunks, type AssistantStreamRecord, type TokenUsage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 
 /**
@@ -45,15 +45,31 @@ export function recordTokenUsage(totals: SessionTokenTotals, turn: number, step:
 }
 
 /**
- * Fold a usage-bearing session event into the running totals.
+ * The final usage reported inside an attempt's embedded stream, or `undefined`
+ * when the stream carries no usage chunk. In the V3 format usage rides the
+ * attempt's stream rather than a standalone `assistant/chunk` usage event.
+ * @param stream - the attempt's compact stream records.
+ * @returns the last usage chunk's usage, or `undefined`.
+ */
+function streamUsage(stream: readonly AssistantStreamRecord[]): TokenUsage | undefined {
+  return assistantStreamChunks(stream, 'usage').at(-1)?.usage
+}
+
+/**
+ * Fold a usage-bearing session event into the running totals. An
+ * `assistant/message` prefers its own `usage` field and falls back to the
+ * stream's final usage chunk (never both, so a step is counted once); an
+ * `assistant/attempt` (no surface message) reads usage from its stream.
  * @param totals - Running totals mutated in place.
  * @param event - Session event; ignored when it carries no usage.
  */
 export function recordEventUsage(totals: SessionTokenTotals, event: SessionEvent): void {
-  if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
-    recordTokenUsage(totals, event.data.turn, event.data.step, event.data.chunk.usage)
-  } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
-    recordTokenUsage(totals, event.data.turn, event.data.step, event.data.usage)
+  if (event.type === 'assistant/message') {
+    const usage = event.data.usage ?? streamUsage(event.data.stream)
+    if (usage !== undefined) recordTokenUsage(totals, event.data.turn, event.data.step, usage)
+  } else if (event.type === 'assistant/attempt') {
+    const usage = streamUsage(event.data.stream)
+    if (usage !== undefined) recordTokenUsage(totals, event.data.turn, event.data.step, usage)
   }
 }
 

@@ -7,6 +7,7 @@
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { expandAssistantStream, type StreamChunk, type TimedStreamChunk } from '@deepseek-ai/dsh-llm'
 import type { Palette } from '../components/theme.ts'
 
 /**
@@ -87,12 +88,6 @@ function timingState(startedAt?: number): TimingState {
   }
 }
 
-function sameStep(event: SessionEvent, position: StepPosition): boolean {
-  return typeof event.data === 'object'
-    && 'turn' in event.data && 'step' in event.data
-    && event.data.turn === position.turn && event.data.step === position.step
-}
-
 function closeTimingBucket(state: TimingState, at: number): void {
   if (state.active === undefined) return
   state.totals[state.active.bucket] += Math.max(0, at - state.active.since)
@@ -105,23 +100,64 @@ function enterTimingBucket(state: TimingState, bucket: TimingBucket | undefined,
   if (bucket !== undefined) state.active = { bucket, since: at }
 }
 
-function advanceStepTiming(
-  state: TimingState,
-  event: Extract<SessionEvent, { type: 'assistant/chunk' | 'tool/call' | 'step/end' }>,
-): void {
-  if (event.type === 'assistant/chunk') {
-    const chunk = event.data.chunk
-    if (state.active?.bucket === 'ttft') enterTimingBucket(state, undefined, event.time)
-    if (chunk.type === 'reasoning-delta' || (chunk.type === 'block-start' && chunk.blockType === 'reasoning')) {
-      enterTimingBucket(state, 'thinking', event.time)
-    } else if (chunk.type === 'text-delta' || (chunk.type === 'block-start' && chunk.blockType === 'text')) {
-      enterTimingBucket(state, 'responding', event.time)
-    }
-  } else if (event.type === 'tool/call') {
-    enterTimingBucket(state, 'tools', event.time)
-  } else {
-    closeTimingBucket(state, event.time)
+/**
+ * Fold one timed model chunk into a step's phase timing: the model-wait bucket
+ * closes at the first chunk, a reasoning delta opens `thinking`, a text delta
+ * opens `responding`. Other chunk types leave the active bucket unchanged. In
+ * the V3 format these chunks come from an attempt's embedded stream, not from
+ * per-chunk log events.
+ * @param state - the step's timing state, mutated in place.
+ * @param time - the chunk's original session timestamp.
+ * @param chunk - one model stream chunk.
+ */
+function observeChunkTiming(state: TimingState, time: number, chunk: StreamChunk): void {
+  if (state.active?.bucket === 'ttft') enterTimingBucket(state, undefined, time)
+  if (chunk.type === 'reasoning-delta' || (chunk.type === 'block-start' && chunk.blockType === 'reasoning')) {
+    enterTimingBucket(state, 'thinking', time)
+  } else if (chunk.type === 'text-delta' || (chunk.type === 'block-start' && chunk.blockType === 'text')) {
+    enterTimingBucket(state, 'responding', time)
   }
+}
+
+/**
+ * Fold a settled attempt's embedded provider stream into a step's phase timing.
+ * Replaces the sequence of `assistant/chunk` events the log carried before V3.
+ * @param state - the step's timing state, mutated in place.
+ * @param chunks - timed chunks, e.g. from {@link expandAssistantStream}.
+ */
+function foldStreamTiming(state: TimingState, chunks: readonly TimedStreamChunk[]): void {
+  for (const { time, chunk } of chunks) observeChunkTiming(state, time, chunk)
+}
+
+/**
+ * Expand an attempt's embedded stream and fold it, tolerating a malformed
+ * record: this runs in the render hot path, so a corrupt embedded stream yields
+ * no timing rather than throwing through the transcript.
+ */
+function foldEmbeddedStream(state: TimingState, stream: readonly unknown[]): void {
+  try {
+    foldStreamTiming(state, expandAssistantStream(stream as never))
+  } catch {
+    // A durable stream that fails validation contributes no phase timing.
+  }
+}
+
+/**
+ * Per-phase totals for one attempt's stream between a step-start and a step-end
+ * clock. Pure entry point for tests and callers that hold a single stream.
+ * @param startTime - the step's start timestamp (opens the model-wait bucket).
+ * @param chunks - the attempt's timed chunks.
+ * @param endTime - the clock the open bucket accumulates up to.
+ * @returns the per-phase totals.
+ */
+export function streamTimingTotals(
+  startTime: number,
+  chunks: readonly TimedStreamChunk[],
+  endTime: number,
+): TimingTotals {
+  const state = timingState(startTime)
+  foldStreamTiming(state, chunks)
+  return timingTotalsAt(state, endTime)
 }
 
 function timingTotalsAt(state: TimingState, at?: number): TimingTotals {
@@ -173,11 +209,20 @@ export class StepTimingTracker {
       if (event.type === 'step/start') {
         const key = stepKey(event.data)
         if (!this.steps.has(key)) this.steps.set(key, { ...timingState(event.time), closed: false })
-      } else if (event.type === 'assistant/chunk' || event.type === 'tool/call' || event.type === 'step/end') {
+      } else if (event.type === 'assistant/message' || event.type === 'assistant/attempt'
+        || event.type === 'tool/call' || event.type === 'step/end') {
         const state = this.steps.get(stepKey(event.data))
         if (state !== undefined && !state.closed) {
-          advanceStepTiming(state, event)
-          if (event.type === 'step/end') state.closed = true
+          if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
+            // The attempt's stream (thinking→responding) is embedded in one
+            // durable event rather than a run of `assistant/chunk` events.
+            foldEmbeddedStream(state, event.data.stream)
+          } else if (event.type === 'tool/call') {
+            enterTimingBucket(state, 'tools', event.time)
+          } else {
+            closeTimingBucket(state, event.time)
+            state.closed = true
+          }
         }
       }
     }
@@ -202,7 +247,7 @@ export function openTurn(events: readonly SessionEvent[]): number | undefined {
 
 /**
  * Turn/step coordinates of the most recent step — open or already closed — or
- * `undefined` when the log holds no step. Unlike {@link openStepPhase}, which
+ * `undefined` when the log holds no step. Unlike the live phase tracker, which
  * stops at a `step/end`/`turn/end`, this returns the last `step/start` in the
  * log regardless, so it feeds {@link StepTimingTracker.totalsAt} the step whose
  * durations to show: the live one while a step runs, and the just-finished one's
@@ -235,55 +280,57 @@ export const TIMING_BUCKET_GLYPHS: Record<TimingBucket, string> = {
 const COMPACTING_GLYPH = '⊙'
 
 /**
- * Derive the currently open step's active timing bucket, or `undefined` when no
- * step is open. The open step is the last `step/start` with no later matching
- * `step/end`; its bucket is replayed with the same rules as {@link StepTimingTracker}.
- * @param events - Session events to scan.
- * @returns The open step's active bucket, or `undefined`.
+ * Live per-step phase tracker fed by `agent/assistant-stream` frames. In the V3
+ * format the open step's chunks are not in the session log while it streams (the
+ * attempt commits one embedded stream at `step/end`), so the live status glyph
+ * derives its phase from the frames as they arrive rather than by scanning the
+ * log. Durations are not accumulated here — only the active bucket is reported.
  */
-export function openStepPhase(events: readonly SessionEvent[]): TimingBucket | undefined {
-  let startIndex = -1
-  let start: Extract<SessionEvent, { type: 'step/start' }> | undefined
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index] as SessionEvent
-    if (event.type === 'step/end') return undefined
-    if (event.type === 'step/start') {
-      startIndex = index
-      start = event
-      break
-    }
-    if (event.type === 'turn/end') return undefined
+export class LiveStepPhase {
+  private state: TimingState | undefined
+
+  /** Begin a fresh step: model-wait until the first observed chunk. */
+  begin(): void {
+    this.state = timingState(0)
   }
-  if (start === undefined) return undefined
-  const position = start.data
-  const state = timingState(start.time)
-  for (let index = startIndex + 1; index < events.length; index += 1) {
-    const event = events[index] as SessionEvent
-    if ((event.type === 'assistant/chunk' || event.type === 'tool/call' || event.type === 'step/end')
-      && sameStep(event, position)) {
-      advanceStepTiming(state, event)
-    }
+
+  /**
+   * Fold one live stream chunk into the open step's phase.
+   * @param time - the frame's chunk timestamp.
+   * @param chunk - one model stream chunk.
+   */
+  observe(time: number, chunk: StreamChunk): void {
+    if (this.state !== undefined) observeChunkTiming(this.state, time, chunk)
   }
-  return state.active?.bucket
+
+  /** Clear the live phase when the step ends or the attempt is abandoned. */
+  reset(): void {
+    this.state = undefined
+  }
+
+  /** The open step's active bucket, or `undefined` when none is streaming. */
+  phase(): TimingBucket | undefined {
+    return this.state?.active?.bucket
+  }
 }
 
 /**
  * The active status glyph, or `undefined` when idle. A running turn takes
  * precedence over standalone compaction and falls back to the pre-first-token
- * wait when no step is open. The caller applies the shared fade and throb
- * animation (see {@link fadeGlyph}).
- * @param events - Session events to derive the phase from.
+ * wait before the first frame arrives. The caller applies the shared fade and
+ * throb animation (see {@link fadeGlyph}).
+ * @param livePhase - the live phase tracker fed by assistant-stream frames.
  * @param running - Whether the agent is currently running.
  * @param compacting - Whether a live standalone compaction bracket is open.
  * @returns The active status glyph, or `undefined` when idle.
  */
 export function runningPhaseGlyph(
-  events: readonly SessionEvent[],
+  livePhase: LiveStepPhase,
   running: boolean,
   compacting: boolean,
 ): string | undefined {
   if (running) {
-    const bucket = openStepPhase(events) ?? 'ttft'
+    const bucket = livePhase.phase() ?? 'ttft'
     return TIMING_BUCKET_GLYPHS[bucket]
   }
   return compacting ? COMPACTING_GLYPH : undefined
