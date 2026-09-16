@@ -10,13 +10,18 @@
 # `main` is the agent the TUI drives. Its exact session identity (fresh UUID or
 # --resume) is provided by the tui-startup row through the
 # configuredAgentIdentities slot; `inject` makes this row wait for it.
+#
+# NO hardcoded provider/model: the TUI shell COMPOSES with the host's model-provider
+# plugin (high cohesion, loose coupling) rather than pinning a default here. `main`'s
+# provider/model are supplied by the host through the `agent/request` waterfall (the
+# loop blesses an options-empty agent bound entirely via that seam) and chosen at
+# runtime by the in-TUI `/model` command. A deployment that wants a standalone default
+# re-patches this row with provider/model in its own profile/overlay.
 - id: agent-loop
   inject: [tuiStartup]
   config:
     agents:
       - id: main
-        provider: deepseek-official
-        model: deepseek-v4-pro
         cwd: !!js process.cwd()
 
 # Keep the persona to identity and behavior; tool plugins own tool guidance.
