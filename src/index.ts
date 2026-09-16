@@ -697,6 +697,25 @@ export function createTuiChat(
   })
   updatePromptValues()
 
+  // Seed the initial model selection from the host's model-provider plugin when nothing else bound it (empty
+  // agent options + no logged header ⇒ `initialTarget` returned undefined ⇒ "model unset"). A TUI shell composes
+  // with the host's default rather than hardcoding one: the host publishes `{provider, model}` under the
+  // `modelProviderDefault` context value (`ctx.provide`), which we read here. The publisher is a `--patch` plugin
+  // that may activate BEFORE this synchronous mount (seed now) OR AFTER it (re-seed on `llm/adapters-updated`,
+  // which its `registerAdapter` emits right after it provides the value). A later `/model` pick still wins — this
+  // only ever fills an unset selection. `{{model}}` resolves on the next assembly once `target.current` is set.
+  const seedHostDefault = (): void => {
+    if (target.current !== undefined) return
+    const dflt = ctx.get('modelProviderDefault', false) as { provider?: unknown, model?: unknown } | undefined
+    if (dflt === undefined || typeof dflt.provider !== 'string' || typeof dflt.model !== 'string') return
+    target.current = { provider: dflt.provider, model: dflt.model }
+    modelController.resetContextResolution()
+    updatePromptValues()
+    requestRender()
+  }
+  seedHostDefault()
+  const disposeHostDefault = ctx.on('llm/adapters-updated', () => seedHostDefault())
+
   const renderStatus = (): void => {
     streaming?.invalidate()
     requestRender()
@@ -1946,6 +1965,7 @@ export function createTuiChat(
     disposeError()
     disposeAgent()
     disposeTargetListeners()
+    disposeHostDefault()
     modelController.detach()
   }
 
