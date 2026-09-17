@@ -55,6 +55,7 @@ import type SkillRegistry from '@deepseek-ai/dsh-skill'
 // the ask-user-question queue is registered by ./chat/questions.
 import type {} from '@deepseek-ai/dsh-user-questions'
 import type {} from '@deepseek-ai/dsh-permission-presets'
+import type {} from '@deepseek-ai/dsh-subagent'
 import {
   TuiExtensionServiceImpl,
   TuiOverlayManager,
@@ -108,6 +109,8 @@ import { applyDetailsArguments, createQuietCommand, nextReasoningFold } from './
 import { TuiKeymap } from './chat/keymap.ts'
 import { createPermissionModeController, type PermissionModeController } from './chat/permission-mode.ts'
 import { HistoryStore } from './chat/history-store.ts'
+import { createSubagentSwitcher, type SubagentSwitcher } from './chat/subagents.ts'
+import { SubagentStrip } from './components/subagent-strip.ts'
 import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
@@ -241,7 +244,7 @@ export abstract class TuiExtensionService extends Service {
 }
 
 export const name = 'ui-tui'
-export const inject = ['agents', 'sessions', 'commands', 'userQuestions', 'tools', 'llm', 'systemPrompt', 'tokenMeter', 'tuiPrompt', 'permissionPresets']
+export const inject = ['agents', 'sessions', 'commands', 'userQuestions', 'tools', 'llm', 'systemPrompt', 'tokenMeter', 'tuiPrompt', 'permissionPresets', 'subagents']
 
 /** Model guidance for path-only file references selected through the TUI. */
 export const FILE_REFERENCE_PROMPT = 'Paths prefixed with @ are files explicitly referenced by the user. Use the read tool when their contents are needed; do not claim to have inspected a file before reading it.'
@@ -329,6 +332,8 @@ export function createTuiChat(
   // otherwise steal them for scroll-to-top/bottom). See freeEditorHomeEnd.
   freeEditorHomeEnd(getKeybindings())
   const chat = new Container()
+  const viewSlot = new Container()
+  viewSlot.addChild(chat)
   const todoContainer = new Container()
   const questionContainer = new Container()
   const inputTemplate = parseTuiPromptTemplate(displayInlineText(resolved.theme.inputPrompt))
@@ -422,6 +427,7 @@ export function createTuiChat(
   // oxlint-disable-next-line prefer-const -- single assignment is a forward-reference, not a const.
   let modelController!: ModelController
   let permissionController!: PermissionModeController
+  let subagentSwitcher!: SubagentSwitcher
   const now = (): number => runtime.now?.() ?? Date.now()
   const agentStatus = (): AgentStatus => agent.status
   const isDisposed = (): boolean => disposed
@@ -603,8 +609,15 @@ export function createTuiChat(
   // transcript, todo, compaction) inside the SOLE primary ScrollView; prompt /
   // inline-modal mount / editor pinned below. chat stays transcript-only, so its
   // in-place children mutations keep their index meaning.
-  const { root: layoutRoot } = buildTuiLayout({
-    header, chat, todoContainer, compactionStatusLine, dashboard: dashboardPane, promptContext, questionContainer, editor,
+  const subagentStrip = new SubagentStrip(
+    keymap, palette,
+    () => subagentSwitcher.prev(),
+    () => subagentSwitcher.next(),
+    () => subagentSwitcher.back(),
+  )
+  const { root: layoutRoot, transcriptScroll } = buildTuiLayout({
+    header, chat: viewSlot, todoContainer, compactionStatusLine, subagentStrip,
+    dashboard: dashboardPane, promptContext, questionContainer, editor,
   })
   ui.setLayoutRoot(layoutRoot)
   ui.setFocus(editor)
@@ -639,6 +652,49 @@ export function createTuiChat(
     const color = kind === 'error' ? palette.error : kind === 'warning' ? palette.warning : palette.dim
     chat.addChild(new Spacer(1))
     chat.addChild(new Text(color(displayText(message)), 0, 0))
+    requestRender()
+  }
+
+  let showingChild = false
+  let mainScroll = { top: 0, following: true }
+  subagentSwitcher = createSubagentSwitcher({
+    ctx, main: agent, palette, resolved,
+    onRows: (rows, selectedId) => {
+      subagentStrip.setRows(rows, selectedId)
+      if (!subagentStrip.hasChildren() && subagentStrip.focused) ui.setFocus(editor)
+      requestRender()
+    },
+    onView: (view) => {
+      if (view !== undefined && !showingChild) {
+        mainScroll = { top: transcriptScroll.scrollTop, following: transcriptScroll.isFollowingEnd }
+      }
+      showingChild = view !== undefined
+      viewSlot.clear()
+      viewSlot.addChild(view ?? chat)
+      if (view === undefined) {
+        ui.setFocus(editor)
+        requestRender()
+        queueMicrotask(() => {
+          if (mainScroll.following) transcriptScroll.scrollToEnd()
+          else transcriptScroll.scrollTo(mainScroll.top, { disableFollow: true })
+          ui.requestRender(true)
+        })
+      } else {
+        transcriptScroll.scrollToStart()
+        requestRender()
+      }
+    },
+    onRender: requestRender,
+    onError: message => appendNotice(message, 'warning'),
+  })
+  const focusAgents = async (): Promise<void> => {
+    await subagentSwitcher.refresh()
+    if (disposed) return
+    if (!subagentStrip.hasChildren()) {
+      appendNotice('No child agents to view.', 'warning')
+      return
+    }
+    ui.setFocus(subagentStrip)
     requestRender()
   }
 
@@ -1291,6 +1347,7 @@ export function createTuiChat(
       referenceControllers.clear()
       await tuiServiceFiber?.dispose()
       tuiServiceFiber = undefined
+      subagentSwitcher.dispose()
       questions.rejectAll()
       await overlayManager.dispose()
       modelController.clearOverlay()
@@ -1445,6 +1502,7 @@ export function createTuiChat(
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
       'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
       'Shift+Tab cycle permission (model picker: cycle effort)',
+      'Ctrl+G or /agents focus child agents · ←/→ select · Esc return to main',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
       '',
       ...commandLines,
@@ -1637,6 +1695,11 @@ export function createTuiChat(
       name: 'cards',
       description: 'Browse full tool-card details without changing the transcript',
       handler: () => { showCards(); return { kind: 'success' } },
+    })
+    commandCtx.commands.register({
+      name: 'agents',
+      description: 'View direct child-agent transcripts (input stays on main)',
+      handler: () => { void focusAgents(); return { kind: 'success' } },
     })
     commandCtx.commands.register({
       name: 'palette',
@@ -1896,6 +1959,7 @@ export function createTuiChat(
 
   const removeInputListener = ui.addInputListener((data) => {
     if (overlayManager.hasActiveOverlay()) return undefined
+    if (subagentStrip.focused) return undefined
     const action = keymap.resolve(data)
     if (action === undefined) return undefined
     switch (action) {
@@ -1922,6 +1986,13 @@ export function createTuiChat(
           () => { if (!disposed) appendNotice('Permission change failed.', 'error') },
         )
         break
+      case 'agents':
+        void focusAgents()
+        break
+      case 'subagentPrev':
+      case 'subagentNext':
+      case 'subagentBack':
+        return undefined // owned only by the focused strip
     }
     return { consume: true }
   })
@@ -2011,6 +2082,7 @@ export function createTuiChat(
   })
 
   const detachListeners = (): void => {
+    subagentSwitcher.dispose()
     skillAbort.abort()
     fileSearch.dispose()
     removeInputListener()

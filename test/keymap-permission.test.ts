@@ -20,11 +20,11 @@ describe('composer keymap', () => {
   })
 
   it('remaps atomically and retains the prior safety routes on invalid reload', () => {
-    const keys = new TuiKeymap({ cards: 'ctrl+g' })
-    expect(keys.resolve('\x07')).toBe('cards')
-    expect(() => keys.replace({ cards: 'ctrl+g', exit: 'ctrl+g' })).toThrow(/Duplicate/)
+    const keys = new TuiKeymap({ cards: 'ctrl+b' })
+    expect(keys.resolve('\x02')).toBe('cards')
+    expect(() => keys.replace({ cards: 'ctrl+b', exit: 'ctrl+b' })).toThrow(/Duplicate/)
     expect(keys.resolve('\x04')).toBe('exit')
-    expect(keys.resolve('\x07')).toBe('cards')
+    expect(keys.resolve('\x02')).toBe('cards')
     expect(() => keys.replace({ cancel: '' })).toThrow()
     expect(keys.resolve('\x1b')).toBe('cancel')
   })
