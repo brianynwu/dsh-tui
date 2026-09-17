@@ -546,10 +546,19 @@ export class ToolCardComponent extends CachedCardComponent {
     this.dropLines()
   }
 
+  /** Render the retained card at full detail without changing its transcript phase. */
+  renderFull(width: number): string[] {
+    return this.renderCard(width, 'expanded')
+  }
+
   protected renderLines(width: number): string[] {
+    return this.renderCard(width, this.visibility)
+  }
+
+  private renderCard(width: number, visibility: ToolCardVisibility): string[] {
     // Hidden renders nothing — not even the leading gap — so the transcript
     // keeps only the conversation, the way Codex hides tool calls.
-    if (this.visibility === 'hidden') return []
+    if (visibility === 'hidden') return []
     const isError = this.result?.isError ?? false
     // A ring marker: hollow while the call is pending, filled once it settles;
     // the header color (warning/success/error) tells pending from ok from error.
@@ -580,7 +589,7 @@ export class ToolCardComponent extends CachedCardComponent {
       ? renderUnknownXml(
         displayText(contentText(markdownContent)),
         this.maxOutputLines,
-        this.visibility === 'expanded',
+        visibility === 'expanded',
         displayText,
         text => this.palette.dim(text),
         text => this.palette.dim(text),
@@ -594,7 +603,7 @@ export class ToolCardComponent extends CachedCardComponent {
     const body = unknownXml ?? (markdownContent !== undefined && rawBody.lines.length > 0
       ? this.dimBody(rawBody, width)
       : [...rawBody.prelude, ...rawBody.lines])
-    const visibleBody = unknownXml !== undefined || this.visibility === 'expanded'
+    const visibleBody = unknownXml !== undefined || visibility === 'expanded'
       ? body
       : preview(body, this.maxOutputLines, count => this.palette.dim(`… +${count} lines (Ctrl+O to expand)`))
     // The header is a fixed `Tool / <name>` frame in the status color (warning

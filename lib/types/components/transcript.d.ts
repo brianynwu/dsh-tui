@@ -182,7 +182,10 @@ export declare class ToolCardComponent extends CachedCardComponent {
      * @param visibility - Hidden, collapsed preview, or full body.
      */
     setVisibility(visibility: ToolCardVisibility): void;
+    /** Render the retained card at full detail without changing its transcript phase. */
+    renderFull(width: number): string[];
     protected renderLines(width: number): string[];
+    private renderCard;
     /** The pending terminal call view, when this row is a terminal card. */
     private terminalPending;
     /**

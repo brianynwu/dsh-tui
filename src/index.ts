@@ -106,6 +106,7 @@ import {
   type ReasoningFold,
 } from './config.ts'
 import { applyDetailsArguments, createQuietCommand, handleReasoningShortcut } from './chat/details.ts'
+import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
   type ToolCardVisibility,
@@ -1356,6 +1357,24 @@ export function createTuiChat(
     requestRender()
   }
 
+  let cardsOverlay: TuiOverlaySession | undefined
+  const showCards = (): void => {
+    void cardsOverlay?.close()
+    const width = cardsOverlayWidth(runtime.terminal.columns)
+    const session = overlayManager.open({
+      create: host => new CardsOverlay(
+        [...allToolCards], width, () => runtime.terminal.rows, palette,
+        () => host.invalidate(), () => host.close(),
+      ),
+      options: { width, maxHeight: '80%', anchor: 'center', margin: 1 },
+    })
+    cardsOverlay = session
+    void session.closed.then(() => {
+      if (cardsOverlay === session) cardsOverlay = undefined
+    })
+    requestRender()
+  }
+
   // `/details` names the same transcript-detail state the Ctrl+O cycle and
   // Ctrl+R cycle mutate, so a user can jump to a mode without cycling.
   const runDetails = (rawInput: string): CommandResult => {
@@ -1375,7 +1394,7 @@ export function createTuiChat(
     chat.addChild(new Text(palette.bold(palette.accent('Keyboard shortcuts')), 0, 0))
     chat.addChild(new Text([
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
-      'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+L redraw',
+      'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
       '',
       ...commandLines,
@@ -1562,6 +1581,11 @@ export function createTuiChat(
       description: 'Toggle conversation-only view and restore the prior details',
       input: { hint: '[on|off]' },
       handler: ({ rawInput }) => runQuiet(rawInput),
+    })
+    commandCtx.commands.register({
+      name: 'cards',
+      description: 'Browse full tool-card details without changing the transcript',
+      handler: () => { showCards(); return { kind: 'success' } },
     })
     commandCtx.commands.register({
       name: 'palette',
@@ -1821,6 +1845,10 @@ export function createTuiChat(
 
   const removeInputListener = ui.addInputListener((data) => {
     if (overlayManager.hasActiveOverlay()) return undefined
+    if (matchesKey(data, Key.ctrl('t'))) {
+      showCards()
+      return { consume: true }
+    }
     if (matchesKey(data, Key.ctrl('o'))) {
       toggleTools()
       return { consume: true }
