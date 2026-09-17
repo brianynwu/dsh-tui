@@ -110,7 +110,9 @@ import { TuiKeymap } from './chat/keymap.ts'
 import { createPermissionModeController, type PermissionModeController } from './chat/permission-mode.ts'
 import { HistoryStore } from './chat/history-store.ts'
 import { createSubagentSwitcher, type SubagentSwitcher } from './chat/subagents.ts'
-import { SubagentStrip } from './components/subagent-strip.ts'
+import { ChildViewKeys } from './components/child-view-keys.ts'
+import { AgentsBrowser } from './chat/agents-browser.ts'
+import { ChildViewSlot } from './chat/child-view.ts'
 import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
@@ -428,6 +430,7 @@ export function createTuiChat(
   let modelController!: ModelController
   let permissionController!: PermissionModeController
   let subagentSwitcher!: SubagentSwitcher
+  let agentsBrowser!: AgentsBrowser
   const now = (): number => runtime.now?.() ?? Date.now()
   const agentStatus = (): AgentStatus => agent.status
   const isDisposed = (): boolean => disposed
@@ -609,14 +612,11 @@ export function createTuiChat(
   // transcript, todo, compaction) inside the SOLE primary ScrollView; prompt /
   // inline-modal mount / editor pinned below. chat stays transcript-only, so its
   // in-place children mutations keep their index meaning.
-  const subagentStrip = new SubagentStrip(
-    keymap, palette,
-    () => subagentSwitcher.prev(),
-    () => subagentSwitcher.next(),
-    () => subagentSwitcher.back(),
-  )
+  const childViewKeys = new ChildViewKeys(keymap, () => {
+    agentsBrowser.backFromChild()
+  })
   const { root: layoutRoot, transcriptScroll } = buildTuiLayout({
-    header, chat: viewSlot, todoContainer, compactionStatusLine, subagentStrip,
+    header, chat: viewSlot, todoContainer, compactionStatusLine, childViewKeys,
     dashboard: dashboardPane, promptContext, questionContainer, editor,
   })
   ui.setLayoutRoot(layoutRoot)
@@ -655,48 +655,21 @@ export function createTuiChat(
     requestRender()
   }
 
-  let showingChild = false
-  let mainScroll = { top: 0, following: true }
+  const childViewSlot = new ChildViewSlot(
+    viewSlot, chat, transcriptScroll, () => ui.setFocus(editor),
+    full => { if (full) ui.requestRender(true); else requestRender() },
+  )
   subagentSwitcher = createSubagentSwitcher({
     ctx, main: agent, palette, resolved,
-    onRows: (rows, selectedId) => {
-      subagentStrip.setRows(rows, selectedId)
-      if (!subagentStrip.hasChildren() && subagentStrip.focused) ui.setFocus(editor)
+    onRows: (rows) => {
+      agentsBrowser?.setRows(rows)
       requestRender()
     },
-    onView: (view) => {
-      if (view !== undefined && !showingChild) {
-        mainScroll = { top: transcriptScroll.scrollTop, following: transcriptScroll.isFollowingEnd }
-      }
-      showingChild = view !== undefined
-      viewSlot.clear()
-      viewSlot.addChild(view ?? chat)
-      if (view === undefined) {
-        ui.setFocus(editor)
-        requestRender()
-        queueMicrotask(() => {
-          if (mainScroll.following) transcriptScroll.scrollToEnd()
-          else transcriptScroll.scrollTo(mainScroll.top, { disableFollow: true })
-          ui.requestRender(true)
-        })
-      } else {
-        transcriptScroll.scrollToStart()
-        requestRender()
-      }
-    },
+    onView: view => childViewSlot.set(view),
     onRender: requestRender,
     onError: message => appendNotice(message, 'warning'),
   })
-  const focusAgents = async (): Promise<void> => {
-    const opened = await subagentSwitcher.open()
-    if (disposed) return
-    if (!opened) {
-      if (!subagentStrip.hasChildren()) appendNotice('No child agents to view.', 'warning')
-      return
-    }
-    ui.setFocus(subagentStrip)
-    requestRender()
-  }
+  const focusAgents = (): Promise<void> => agentsBrowser.open()
 
   const historyWarning = (): void => {
     if (historyWarningShown) return
@@ -781,6 +754,13 @@ export function createTuiChat(
       if (disposed) return
       appendNotice(`TUI overlay failed: ${message}`, 'error')
     },
+  })
+
+  agentsBrowser = new AgentsBrowser({
+    switcher: subagentSwitcher, overlays: overlayManager, keymap, palette,
+    viewport: () => ({ columns: runtime.terminal.columns, rows: runtime.terminal.rows }),
+    focusChild: () => { ui.setFocus(childViewKeys) },
+    isDisposed: () => disposed,
   })
 
   const disposeTargetListeners = installModelSelection(agent.ctx, target)
@@ -1502,7 +1482,7 @@ export function createTuiChat(
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
       'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
       'Shift+Tab cycle permission (model picker: cycle effort)',
-      'Ctrl+G or /agents focus child agents · ←/→ select · Esc return to main',
+      'Ctrl+G or /agents browse child agents · ↑/↓ select · Enter view · Esc back',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
       '',
       ...commandLines,
@@ -1698,7 +1678,7 @@ export function createTuiChat(
     })
     commandCtx.commands.register({
       name: 'agents',
-      description: 'View direct child-agent transcripts (input stays on main)',
+      description: 'Browse direct child agents and read-only transcripts',
       handler: () => { void focusAgents(); return { kind: 'success' } },
     })
     commandCtx.commands.register({
@@ -1959,7 +1939,7 @@ export function createTuiChat(
 
   const removeInputListener = ui.addInputListener((data) => {
     if (overlayManager.hasActiveOverlay()) return undefined
-    if (subagentStrip.focused) return undefined
+    if (childViewKeys.focused) return undefined
     const action = keymap.resolve(data)
     if (action === undefined) return undefined
     switch (action) {

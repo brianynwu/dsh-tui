@@ -19,11 +19,11 @@ export const DEFAULT_KEYS = Object.freeze({
 export type TuiAction = keyof typeof DEFAULT_KEYS
 export type TuiKeyBindings = Partial<Record<TuiAction, string>>
 export type ResolvedTuiKeys = Readonly<Record<TuiAction, KeyId>>
-export type TuiKeyContext = 'composer' | 'subagentStrip' | 'modal'
+export type TuiKeyContext = 'composer' | 'subagentBrowser' | 'modal'
 
 const actions = Object.keys(DEFAULT_KEYS) as TuiAction[]
-const stripActions: readonly TuiAction[] = ['subagentPrev', 'subagentNext', 'subagentBack']
-const composerActions = actions.filter(action => !stripActions.includes(action))
+const browserActions: readonly TuiAction[] = ['subagentPrev', 'subagentNext', 'subagentBack']
+const composerActions = actions.filter(action => !browserActions.includes(action))
 const modifierOrder = ['shift', 'ctrl', 'alt', 'super'] as const
 const modifiers = new Set<string>(modifierOrder)
 const specialKeys = new Map<string, string>([
@@ -63,17 +63,17 @@ export function resolveKeymap(overrides: Record<string, string> | undefined): Re
     map[action as TuiAction] = binding
   }
   const resolved = {} as Record<TuiAction, KeyId>
-  const occupied = { composer: new Set<KeyId>(), subagentStrip: new Set<KeyId>() }
+  const occupied = { composer: new Set<KeyId>(), subagentBrowser: new Set<KeyId>() }
   for (const action of actions) {
     const binding = parseBinding(map[action])
-    const context = stripActions.includes(action) ? 'subagentStrip' : 'composer'
+    const context = browserActions.includes(action) ? 'subagentBrowser' : 'composer'
     if (occupied[context].has(binding)) throw new Error(`Duplicate TUI key binding: ${binding}`)
     occupied[context].add(binding)
     resolved[action] = binding
   }
   // The same chord may have distinct owners in mutually exclusive contexts.
   for (const safety of ['cancel', 'exit', 'subagentBack'] as const) {
-    const context = safety === 'subagentBack' ? stripActions : composerActions
+    const context = safety === 'subagentBack' ? browserActions : composerActions
     if (context.find(action => resolved[action] === resolved[safety]) !== safety) {
       throw new Error(`Unreachable TUI safety action: ${safety}`)
     }
@@ -99,7 +99,7 @@ export class TuiKeymap {
 
   resolve(data: string, context: TuiKeyContext = 'composer'): TuiAction | undefined {
     if (context === 'modal') return undefined
-    const owned = context === 'composer' ? composerActions : stripActions
+    const owned = context === 'composer' ? composerActions : browserActions
     return owned.find(action => matchesKey(data, this.current[action]))
   }
 }

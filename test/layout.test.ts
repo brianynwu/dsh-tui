@@ -46,11 +46,12 @@ function entries(stack: VStack): Array<{ component: Component; grow?: number; sh
 }
 
 describe('buildTuiLayout render-tree shape', () => {
-  it('pins an optional child strip above the dashboard without shrinking the editor', () => {
-    const parts = { ...makeParts(), subagentStrip: new Lines(1, 'agents') }
+  it('keeps the child-view key target zero-height with no persistent Agents line', () => {
+    const parts = { ...makeParts(), childViewKeys: new Lines(0, 'agents') }
     const rootEntries = entries(buildTuiLayout(parts).root)
     expect(rootEntries).toHaveLength(6)
-    expect(rootEntries[1].component).toBe(parts.subagentStrip)
+    expect(rootEntries[1].component).toBe(parts.childViewKeys)
+    expect(rootEntries[1].component.render(80)).toEqual([])
     expect(rootEntries[2].component).toBe(parts.dashboard)
     expect(rootEntries[1].shrink).toBe(0)
     expect(rootEntries.at(-1)?.component).toBe(parts.editor)

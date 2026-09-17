@@ -17,7 +17,7 @@ export declare const DEFAULT_KEYS: Readonly<{
 export type TuiAction = keyof typeof DEFAULT_KEYS;
 export type TuiKeyBindings = Partial<Record<TuiAction, string>>;
 export type ResolvedTuiKeys = Readonly<Record<TuiAction, KeyId>>;
-export type TuiKeyContext = 'composer' | 'subagentStrip' | 'modal';
+export type TuiKeyContext = 'composer' | 'subagentBrowser' | 'modal';
 /** Validate and canonicalize pi-tui's KeyId grammar before passing it to matchesKey. */
 export declare function parseBinding(value: string): KeyId;
 /** Reject an entire replacement map if any binding is invalid or a safety action is unreachable. */

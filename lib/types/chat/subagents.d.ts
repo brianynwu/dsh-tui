@@ -6,8 +6,10 @@ import { type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session';
 import type { SubagentListEntry } from '@deepseek-ai/dsh-subagent';
 import { type Palette } from '../components/theme.ts';
 import type { ResolvedTuiConfig } from '../config.ts';
+export type SubagentOriginType = 'standard' | 'fork' | 'unknown';
 export type SubagentRow = SubagentListEntry & {
     readonly execution?: AgentStatus;
+    readonly originType?: SubagentOriginType;
 };
 /** Durable listing is authoritative for lineage; runtime ownership only qualifies active status. */
 export declare function projectSubagents(entries: readonly SubagentListEntry[], ctx: Context, main: Agent): SubagentRow[];
@@ -37,9 +39,7 @@ export interface SubagentSwitcher {
     readonly rows: readonly SubagentRow[];
     readonly selectedId: SessionId | undefined;
     refresh(): Promise<void>;
-    open(): Promise<boolean>;
-    next(): void;
-    prev(): void;
+    select(id: SessionId): boolean;
     back(): void;
     dispose(): void;
 }

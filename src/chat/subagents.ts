@@ -2,7 +2,7 @@
 import { Container, Spacer, Text, type Component } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentStatus, AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
-import { isReplacementSurfaceEvent, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session'
+import { isReplacementSurfaceEvent, type SessionEvent, type SessionHeader, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentListEntry } from '@deepseek-ai/dsh-subagent'
 import { contentText, parseArguments } from '../components/content.ts'
 import { LiveStreamController } from './stream.ts'
@@ -15,7 +15,11 @@ import {
 } from '../components/transcript.ts'
 import type { ResolvedTuiConfig } from '../config.ts'
 
-export type SubagentRow = SubagentListEntry & { readonly execution?: AgentStatus }
+export type SubagentOriginType = 'standard' | 'fork' | 'unknown'
+export type SubagentRow = SubagentListEntry & {
+  readonly execution?: AgentStatus
+  readonly originType?: SubagentOriginType
+}
 
 /** Durable listing is authoritative for lineage; runtime ownership only qualifies active status. */
 export function projectSubagents(entries: readonly SubagentListEntry[], ctx: Context, main: Agent): SubagentRow[] {
@@ -161,9 +165,7 @@ export interface SubagentSwitcher {
   readonly rows: readonly SubagentRow[]
   readonly selectedId: SessionId | undefined
   refresh(): Promise<void>
-  open(): Promise<boolean>
-  next(): void
-  prev(): void
+  select(id: SessionId): boolean
   back(): void
   dispose(): void
 }
@@ -182,8 +184,11 @@ export interface SubagentSwitcherDeps {
 /** Subscribe before observing, then merge the snapshot with buffered live events by sequence. */
 export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwitcher {
   const { ctx, main } = deps
+  let entries: readonly SubagentListEntry[] = []
   let rows: SubagentRow[] = []
   let selectedId: SessionId | undefined
+  const originTypes = new Map<SessionId, SubagentOriginType | 'invalid'>()
+  const pendingTypes = new Map<SessionId, AbortController>()
   let generation = 0
   let refreshAbort: AbortController | undefined
   let viewAbort: AbortController | undefined
@@ -199,7 +204,20 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
     detachFrame?.()
     detachFrame = undefined
   }
-  const publishRows = (): void => deps.onRows(rows, selectedId)
+  const publishRows = (): void => {
+    const next: SubagentRow[] = []
+    for (const row of projectSubagents(entries, ctx, main)) {
+      if (row.kind !== 'child') { next.push(row); continue }
+      const originType = originTypes.get(row.id)
+      if (originType !== 'invalid') next.push({ ...row, originType: originType ?? 'unknown' })
+    }
+    rows = next
+    if (selectedId !== undefined && !rows.some(row => row.kind === 'child' && row.id === selectedId)) {
+      back()
+      return
+    }
+    deps.onRows(rows, selectedId)
+  }
   const back = (): void => {
     generation += 1
     detachView()
@@ -207,9 +225,14 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
     deps.onView(undefined)
     publishRows()
   }
-  const select = (id: SessionId): void => {
+  const select = (id: SessionId): boolean => {
     const row = rows.find(candidate => candidate.kind === 'child' && candidate.id === id)
-    if (row?.kind !== 'child') return
+    if (row?.kind !== 'child') return false
+    const query = ctx.get('sessionQuery', false)
+    if (query === undefined) {
+      deps.onError('Child transcript service is unavailable.')
+      return false
+    }
     generation += 1
     const ownGeneration = generation
     detachView()
@@ -232,15 +255,20 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
       transcript.frame(frame)
       deps.onRender()
     })
-    const query = ctx.get('sessionQuery', false)
-    if (query === undefined) {
-      deps.onError('Child transcript service is unavailable.')
-      back()
-      return
-    }
     void query.observeSession(id, { signal: abort.signal, projectionMode: 'none' }).then(observation => {
       try {
         if (disposed || abort.signal.aborted || ownGeneration !== generation) return
+        const header = observation.header as Partial<SessionHeader> | undefined
+        if (header === undefined) {
+          deps.onError('Child session metadata is unavailable.')
+          back()
+          return
+        }
+        if (header.parentSession !== main.session.id || header.origin !== 'subagent') {
+          deps.onError('Child no longer belongs to this session.')
+          back()
+          return
+        }
         const view = new ChildTranscript(id, row.label, deps.palette, deps.resolved)
         view.replay(observation.events)
         for (const event of buffered.sort((a, b) => a.seq - b.seq)) {
@@ -257,26 +285,49 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
       deps.onError('Child transcript could not be loaded.')
       back()
     })
-  }
-  const selectRelative = (direction: number): void => {
-    const children = rows.filter((row): row is Extract<SubagentRow, { kind: 'child' }> => row.kind === 'child')
-    if (children.length === 0) return
-    const current = children.findIndex(row => row.id === selectedId)
-    const index = current < 0 ? (direction > 0 ? 0 : children.length - 1)
-      : (current + direction + children.length) % children.length
-    const next = children[index]
-    if (next !== undefined) select(next.id)
+    return true
   }
   const refresh = async (): Promise<void> => {
     refreshAbort?.abort()
     const abort = new AbortController()
     refreshAbort = abort
     try {
-      const entries = await ctx.subagents.listChildren(main.session.id, abort.signal)
+      const listed = await ctx.subagents.listChildren(main.session.id, abort.signal)
       if (disposed || abort.signal.aborted) return
-      rows = projectSubagents(entries, ctx, main)
-      if (selectedId !== undefined && !rows.some(row => row.kind === 'child' && row.id === selectedId)) back()
-      else publishRows()
+      entries = listed
+      const ids = new Set(listed.filter(row => row.kind === 'child').map(row => row.id))
+      for (const id of originTypes.keys()) if (!ids.has(id)) originTypes.delete(id)
+      for (const [id, pending] of pendingTypes) {
+        if (!ids.has(id)) { pending.abort(); pendingTypes.delete(id) }
+      }
+      publishRows()
+      const query = ctx.get('sessionQuery', false)
+      for (const id of ids) {
+        if (originTypes.has(id) || pendingTypes.has(id)) continue
+        if (query === undefined) { originTypes.set(id, 'unknown'); continue }
+        const pending = new AbortController()
+        pendingTypes.set(id, pending)
+        void query.observeSession(id, { signal: pending.signal, projectionMode: 'none' }).then(observation => {
+          try {
+            if (disposed || pending.signal.aborted || pendingTypes.get(id) !== pending) return
+            const header = observation.header as Partial<SessionHeader> | undefined
+            originTypes.set(id, header === undefined ? 'unknown'
+              : header.parentSession !== main.session.id || header.origin !== 'subagent' ? 'invalid'
+                : typeof header.isSeeded !== 'boolean' ? 'unknown'
+                  : header.isSeeded ? 'fork' : 'standard')
+          } finally {
+            observation[Symbol.dispose]()
+          }
+        }).catch(() => {
+          if (!disposed && !pending.signal.aborted && pendingTypes.get(id) === pending) {
+            originTypes.set(id, 'unknown')
+          }
+        }).finally(() => {
+          if (pendingTypes.get(id) !== pending) return
+          pendingTypes.delete(id)
+          if (!disposed) publishRows()
+        })
+      }
     } catch {
       if (!disposed && !abort.signal.aborted) deps.onError('Child agent list is unavailable.')
     }
@@ -287,21 +338,14 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
     get rows() { return rows },
     get selectedId() { return selectedId },
     refresh,
-    open: async () => {
-      await refresh()
-      if (disposed) return false
-      const first = rows.find(row => row.kind === 'child')
-      if (first?.kind !== 'child') return false
-      if (selectedId === undefined) select(first.id)
-      return selectedId !== undefined
-    },
-    next: () => selectRelative(1),
-    prev: () => selectRelative(-1),
+    select,
     back,
     dispose: () => {
       disposed = true
       clearInterval(timer)
       refreshAbort?.abort()
+      for (const pending of pendingTypes.values()) pending.abort()
+      pendingTypes.clear()
       detachView()
     },
   }
