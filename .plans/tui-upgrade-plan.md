@@ -10,9 +10,21 @@ suggestion folded: history retention uses a documented best-effort `(timestamp, 
 order, not strict cross-process monotonicity). That original plan cleared review. Its assumed
 precondition (dsh-core >= 0.1.5-rc.2 and /resume re-verified) is now satisfied. Reconciled against the
 deployed 0.1.5-rc.2 contracts and Foundry's retired launcher on 2026-09-16; the original R2 approval
-predates these amendments. Features 1-5 are not yet implemented; operator owns branch + merge. -->
+predates these amendments. Phases 1-5 were implemented on the stacked feature branches below;
+the operator owns merge. -->
 
 # Plan: dsh-tui `0.1.8-revive` feature upgrade (6 features, gated rewind tail)
+
+## Implementation status (2026-09-16)
+
+Phases 1–5 are implemented on `feat/tui-upgrade-phase1` through `feat/tui-upgrade-phase5`
+(final code tip `7355d48`), each with a corresponding `0.1.8-revive.N` prerelease and generated `lib/`.
+The final tree passes `npm test` (146 tests), `npm run build`, `npm pack --dry-run`, and an independent
+Claude diff review (`approve`, no blocking findings). An isolated profile booted against deployed
+dsh-core `0.1.5-rc.2`; live Shift+Tab changed modes through the core command path, and a `/status`
+entry persisted and was recalled in a fresh TUI process. Live child streaming, plan question
+delivery, OSC 9 desktop display, herdr transfer, and `/resume` remain to be checked during
+attended release validation. Phase 6b remains deferred behind the core continuation gate.
 
 ## Why
 
