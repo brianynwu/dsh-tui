@@ -10,6 +10,8 @@ import type { ChatChannelDeps } from './channel.ts';
 export interface QuestionQueueDeps extends ChatChannelDeps {
     /** Current row budget after reserving the editor. */
     questionMaxHeight(): number;
+    /** Raw terminal write path, outside the render tree. */
+    writeTerminal(bytes: string): void;
 }
 /** Ask-user-question controller for one chat channel. */
 export interface QuestionQueue {

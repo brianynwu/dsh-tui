@@ -46,6 +46,15 @@ function entries(stack: VStack): Array<{ component: Component; grow?: number; sh
 }
 
 describe('buildTuiLayout render-tree shape', () => {
+  it('pins an optional child strip above the dashboard without shrinking the editor', () => {
+    const parts = { ...makeParts(), subagentStrip: new Lines(1, 'agents') }
+    const rootEntries = entries(buildTuiLayout(parts).root)
+    expect(rootEntries).toHaveLength(6)
+    expect(rootEntries[1].component).toBe(parts.subagentStrip)
+    expect(rootEntries[2].component).toBe(parts.dashboard)
+    expect(rootEntries[1].shrink).toBe(0)
+    expect(rootEntries.at(-1)?.component).toBe(parts.editor)
+  })
   it('roots a VStack whose sole grow+shrink entry is the primary follow-end ScrollView', () => {
     const parts = makeParts()
     const { root, transcriptScroll, scrollBody } = buildTuiLayout(parts)

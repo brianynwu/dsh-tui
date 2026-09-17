@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-tui/config
  */
 import z from '@deepseek-ai/schemastery';
+import { type ResolvedTuiKeys } from './chat/keymap.ts';
 /** Theme and prompt-template settings for the pi-tui terminal mode. */
 export interface TuiThemeConfig {
     /** Apply the built-in ANSI color palette. */
@@ -22,6 +23,10 @@ export interface TuiThemeConfig {
 }
 /** Interaction and presentation settings for the pi-tui terminal mode. */
 export interface TuiConfig {
+    /** Composer shortcut overrides by action name. Invalid replacements are rejected as a whole. */
+    keys?: Record<string, string>;
+    /** Emit a fixed OSC 9 desktop notification for newly actionable user questions. */
+    notifications?: boolean;
     /** Legacy reasoning visibility alias; `reasoningFold` takes precedence. */
     showReasoning?: boolean;
     /** Reasoning display at startup. Unset preserves the legacy `showReasoning` setting. */
@@ -106,6 +111,8 @@ export interface ResolvedTuiThemeConfig {
 }
 /** Fully defaulted TUI presentation settings. */
 export interface ResolvedTuiConfig {
+    keys: ResolvedTuiKeys;
+    notifications: boolean;
     reasoningFold: ReasoningFold;
     toolCardVisibility: 'hidden' | 'collapsed' | 'expanded';
     maxToolOutputLines: number;

@@ -46,6 +46,8 @@ export interface TuiLayoutParts {
   compactionStatusLine: Component
   /** Runtime metrics dashboard; pinned above the prompt line. */
   dashboard: Component
+  /** Optional read-only child selector, pinned above the dashboard. */
+  subagentStrip?: Component
   /** The left/right prompt line; pinned above the editor. */
   promptContext: Component
   /** Inline-modal / question mount point; pinned. */
@@ -88,6 +90,7 @@ export function buildTuiLayout(parts: TuiLayoutParts): TuiLayout {
   })
   const root = new VStack([
     { component: transcriptScroll, grow: 1, shrink: 1, basis: 0 },
+    ...parts.subagentStrip === undefined ? [] : [{ component: parts.subagentStrip, grow: 0, shrink: 0 }],
     { component: parts.dashboard, grow: 0, shrink: 0 },
     { component: parts.promptContext, grow: 0, shrink: 0 },
     { component: parts.questionContainer, grow: 0, shrink: 0 },

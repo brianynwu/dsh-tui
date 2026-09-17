@@ -77,7 +77,7 @@
     # the same startup-owned identity rather than restating one.
     - id: tui
       name: '@brianynwu/dsh-tui'
-      inject: [tuiStartup]
+      inject: [tuiStartup, permissionPresets, subagents]
       config:
         sessionId: !!js ctx.tuiStartup.sessionId
         showReasoning: true

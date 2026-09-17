@@ -8,13 +8,11 @@
 import {
   CombinedAutocompleteProvider,
   Container,
-  Key,
   Spacer,
   Text,
   TuiAltScreen,
   ProcessTerminal,
   getKeybindings,
-  matchesKey,
   visibleWidth,
   type Component,
   type SlashCommand,
@@ -56,6 +54,8 @@ import type SkillRegistry from '@deepseek-ai/dsh-skill'
 // Type import declaration-merges the `userQuestions` service onto `Context`;
 // the ask-user-question queue is registered by ./chat/questions.
 import type {} from '@deepseek-ai/dsh-user-questions'
+import type {} from '@deepseek-ai/dsh-permission-presets'
+import type {} from '@deepseek-ai/dsh-subagent'
 import {
   TuiExtensionServiceImpl,
   TuiOverlayManager,
@@ -105,7 +105,12 @@ import {
   type Config,
   type ReasoningFold,
 } from './config.ts'
-import { applyDetailsArguments, createQuietCommand, handleReasoningShortcut } from './chat/details.ts'
+import { applyDetailsArguments, createQuietCommand, nextReasoningFold } from './chat/details.ts'
+import { TuiKeymap } from './chat/keymap.ts'
+import { createPermissionModeController, type PermissionModeController } from './chat/permission-mode.ts'
+import { HistoryStore } from './chat/history-store.ts'
+import { createSubagentSwitcher, type SubagentSwitcher } from './chat/subagents.ts'
+import { SubagentStrip } from './components/subagent-strip.ts'
 import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
@@ -239,7 +244,7 @@ export abstract class TuiExtensionService extends Service {
 }
 
 export const name = 'ui-tui'
-export const inject = ['agents', 'sessions', 'commands', 'userQuestions', 'tools', 'llm', 'systemPrompt', 'tokenMeter', 'tuiPrompt']
+export const inject = ['agents', 'sessions', 'commands', 'userQuestions', 'tools', 'llm', 'systemPrompt', 'tokenMeter', 'tuiPrompt', 'permissionPresets', 'subagents']
 
 /** Model guidance for path-only file references selected through the TUI. */
 export const FILE_REFERENCE_PROMPT = 'Paths prefixed with @ are files explicitly referenced by the user. Use the read tool when their contents are needed; do not claim to have inspected a file before reading it.'
@@ -307,6 +312,7 @@ export function createTuiChat(
   const agent = ctx.agents.get(sessionId)
   if (agent === undefined) throw new Error(`ui-tui: session "${sessionId}" is not running`)
   const resolved = resolveTuiConfig(config)
+  const keymap = new TuiKeymap(resolved.keys)
   const palette = createPalette(resolved.theme.color)
   const mdTheme = markdownTheme(palette)
   // Alternate-screen renderer: the TUI owns a full-screen, self-scrolling,
@@ -326,6 +332,8 @@ export function createTuiChat(
   // otherwise steal them for scroll-to-top/bottom). See freeEditorHomeEnd.
   freeEditorHomeEnd(getKeybindings())
   const chat = new Container()
+  const viewSlot = new Container()
+  viewSlot.addChild(chat)
   const todoContainer = new Container()
   const questionContainer = new Container()
   const inputTemplate = parseTuiPromptTemplate(displayInlineText(resolved.theme.inputPrompt))
@@ -343,6 +351,10 @@ export function createTuiChat(
     },
   })
   editor.hintPrefix = initialInputPrompt
+  const historyStore = new HistoryStore()
+  let replayHistory: string[] = []
+  const unsavedHistory: string[] = []
+  let historyWarningShown = false
   const todo = new TodoComponent(palette)
   const compactionStatusLine = new Text('', 0, 0)
   let reasoningFold: ReasoningFold = resolved.reasoningFold
@@ -414,6 +426,8 @@ export function createTuiChat(
   // `updatePromptValues()` call until after the assignment so no read precedes it.
   // oxlint-disable-next-line prefer-const -- single assignment is a forward-reference, not a const.
   let modelController!: ModelController
+  let permissionController!: PermissionModeController
+  let subagentSwitcher!: SubagentSwitcher
   const now = (): number => runtime.now?.() ?? Date.now()
   const agentStatus = (): AgentStatus => agent.status
   const isDisposed = (): boolean => disposed
@@ -434,15 +448,16 @@ export function createTuiChat(
     ctx.tuiPrompt.register('git/worktree', branch === undefined ? undefined : palette.dim(` (${displayText(branch)})`)),
     ctx.tuiPrompt.register('token_meter/cache_hit_rate'),
     ctx.tuiPrompt.register('model'),
+    ctx.tuiPrompt.register('permission'),
     ctx.tuiPrompt.register('context'),
     ctx.tuiPrompt.register('session'),
     ctx.tuiPrompt.register('queued'),
     ctx.tuiPrompt.register('symbol', palette.bold(palette.accent('dsh'))),
     ctx.tuiPrompt.register('indicator', palette.dim('> ')),
   ]
-  const [cwdValue, gitValue, tokenValue, modelValue, contextValue, sessionValue, queuedValue, symbolValue, indicatorValue] = promptValues
+  const [cwdValue, gitValue, tokenValue, modelValue, permissionValue, contextValue, sessionValue, queuedValue, symbolValue, indicatorValue] = promptValues
   /* v8 ignore next -- the fixed built-in registration list always supplies each handle. */
-  if (cwdValue === undefined || gitValue === undefined || tokenValue === undefined || modelValue === undefined
+  if (cwdValue === undefined || gitValue === undefined || tokenValue === undefined || modelValue === undefined || permissionValue === undefined
     || contextValue === undefined || sessionValue === undefined || queuedValue === undefined || symbolValue === undefined || indicatorValue === undefined) {
     throw new Error('TUI prompt built-ins failed to initialize')
   }
@@ -533,6 +548,7 @@ export function createTuiChat(
     const rate = cacheHitRate(tokens)
     const usage = `↑${formatTokens(tokens.input)} ↓${formatTokens(tokens.output)}`
     modelValue.set(`  ${palette.dim(displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current)))}`)
+    permissionValue.set(permissionController.label())
     tokenValue.set(`  ${palette.dim(rate === undefined ? usage : `${usage}  cache ${rate}%`)}`)
     const contextWindow = modelController.contextWindow()
     const usedContext = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
@@ -593,8 +609,15 @@ export function createTuiChat(
   // transcript, todo, compaction) inside the SOLE primary ScrollView; prompt /
   // inline-modal mount / editor pinned below. chat stays transcript-only, so its
   // in-place children mutations keep their index meaning.
-  const { root: layoutRoot } = buildTuiLayout({
-    header, chat, todoContainer, compactionStatusLine, dashboard: dashboardPane, promptContext, questionContainer, editor,
+  const subagentStrip = new SubagentStrip(
+    keymap, palette,
+    () => subagentSwitcher.prev(),
+    () => subagentSwitcher.next(),
+    () => subagentSwitcher.back(),
+  )
+  const { root: layoutRoot, transcriptScroll } = buildTuiLayout({
+    header, chat: viewSlot, todoContainer, compactionStatusLine, subagentStrip,
+    dashboard: dashboardPane, promptContext, questionContainer, editor,
   })
   ui.setLayoutRoot(layoutRoot)
   ui.setFocus(editor)
@@ -630,6 +653,79 @@ export function createTuiChat(
     chat.addChild(new Spacer(1))
     chat.addChild(new Text(color(displayText(message)), 0, 0))
     requestRender()
+  }
+
+  let showingChild = false
+  let mainScroll = { top: 0, following: true }
+  subagentSwitcher = createSubagentSwitcher({
+    ctx, main: agent, palette, resolved,
+    onRows: (rows, selectedId) => {
+      subagentStrip.setRows(rows, selectedId)
+      if (!subagentStrip.hasChildren() && subagentStrip.focused) ui.setFocus(editor)
+      requestRender()
+    },
+    onView: (view) => {
+      if (view !== undefined && !showingChild) {
+        mainScroll = { top: transcriptScroll.scrollTop, following: transcriptScroll.isFollowingEnd }
+      }
+      showingChild = view !== undefined
+      viewSlot.clear()
+      viewSlot.addChild(view ?? chat)
+      if (view === undefined) {
+        ui.setFocus(editor)
+        requestRender()
+        queueMicrotask(() => {
+          if (mainScroll.following) transcriptScroll.scrollToEnd()
+          else transcriptScroll.scrollTo(mainScroll.top, { disableFollow: true })
+          ui.requestRender(true)
+        })
+      } else {
+        transcriptScroll.scrollToStart()
+        requestRender()
+      }
+    },
+    onRender: requestRender,
+    onError: message => appendNotice(message, 'warning'),
+  })
+  const focusAgents = async (): Promise<void> => {
+    await subagentSwitcher.refresh()
+    if (disposed) return
+    if (!subagentStrip.hasChildren()) {
+      appendNotice('No child agents to view.', 'warning')
+      return
+    }
+    ui.setFocus(subagentStrip)
+    requestRender()
+  }
+
+  const historyWarning = (): void => {
+    if (historyWarningShown) return
+    historyWarningShown = true
+    appendNotice('Prompt history storage unavailable; in-memory recall still works.', 'warning')
+  }
+  const refreshHistory = (): readonly string[] | undefined => {
+    try {
+      const persisted = historyStore.load()
+      const persistedTexts = new Set(persisted)
+      return [
+        ...unsavedHistory.filter(text => !persistedTexts.has(text)),
+        ...persisted,
+        ...replayHistory.filter(text => !persistedTexts.has(text)),
+      ].slice(0, 500)
+    } catch {
+      historyWarning()
+      return undefined // keep the editor's current in-memory snapshot
+    }
+  }
+  editor.onHistoryNavigationStart = refreshHistory
+  const recordHistory = (text: string): void => {
+    editor.addToHistory(text)
+    try {
+      if (!historyStore.append(text)) unsavedHistory.unshift(text)
+    } catch {
+      unsavedHistory.unshift(text)
+      historyWarning()
+    }
   }
 
   const extensionTheme: TuiTheme = Object.freeze({
@@ -688,6 +784,14 @@ export function createTuiChat(
   })
 
   const disposeTargetListeners = installModelSelection(agent.ctx, target)
+
+  permissionController = createPermissionModeController(
+    ctx.permissionPresets,
+    agent.session,
+    palette,
+    async text => { await runCommand(text) },
+    text => appendNotice(text, 'warning'),
+  )
 
   modelController = createModelController({
     ctx,
@@ -1197,6 +1301,7 @@ export function createTuiChat(
     overlayManager,
     requestRender,
     isDisposed,
+    writeTerminal: bytes => { runtime.terminal.write(bytes) },
     questionMaxHeight: () => {
       const width = runtime.terminal.columns
       const editorRows = editor.render(width).length
@@ -1242,6 +1347,7 @@ export function createTuiChat(
       referenceControllers.clear()
       await tuiServiceFiber?.dispose()
       tuiServiceFiber = undefined
+      subagentSwitcher.dispose()
       questions.rejectAll()
       await overlayManager.dispose()
       modelController.clearOverlay()
@@ -1395,6 +1501,8 @@ export function createTuiChat(
     chat.addChild(new Text([
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
       'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
+      'Shift+Tab cycle permission (model picker: cycle effort)',
+      'Ctrl+G or /agents focus child agents · ←/→ select · Esc return to main',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
       '',
       ...commandLines,
@@ -1443,6 +1551,7 @@ export function createTuiChat(
         ['Title', displayText(sessionTitle ?? 'untitled')],
         ['Directory', displayText(cwd)],
         ['Model', `${model} ${palette.dim(`(effort ${effort}; reasoning ${reasoningFold})`)}`],
+        ['Permission', displayText(permissionController.current())],
       ],
       [
         ['Agent', [
@@ -1588,6 +1697,11 @@ export function createTuiChat(
       handler: () => { showCards(); return { kind: 'success' } },
     })
     commandCtx.commands.register({
+      name: 'agents',
+      description: 'View direct child-agent transcripts (input stays on main)',
+      handler: () => { void focusAgents(); return { kind: 'success' } },
+    })
+    commandCtx.commands.register({
       name: 'palette',
       description: 'Show every color and attribute role this terminal renders',
       handler: () => { showPalette(); return { kind: 'success' } },
@@ -1633,10 +1747,10 @@ export function createTuiChat(
     })
   })
 
-  const runCommand = (text: string): void => {
+  const runCommand = (text: string): Promise<void> => {
     const controller = new AbortController()
     commandControllers.add(controller)
-    void ctx.commands.execute(agent, text, [], controller.signal).then(
+    return ctx.commands.execute(agent, text, [], controller.signal).then(
       (execution) => {
         if (disposed) return
         if (execution === undefined) {
@@ -1783,7 +1897,7 @@ export function createTuiChat(
     // `/skill:<name>` carries a colon, which the command registry's name
     // grammar rejects, so it is intercepted before generic command routing.
     if (text.startsWith(SKILL_COMMAND_PREFIX)) {
-      editor.addToHistory(text)
+      recordHistory(value)
       editor.setText('')
       const { name: skillName, instructions } = parseSkillCommand(text)
       if (skillName === '') appendNotice('Usage: /skill:<name> [instructions]', 'warning')
@@ -1791,7 +1905,7 @@ export function createTuiChat(
       return
     }
     if (value.startsWith('/')) {
-      editor.addToHistory(text)
+      recordHistory(value)
       editor.setText('')
       runCommand(value)
       return
@@ -1805,7 +1919,7 @@ export function createTuiChat(
       return
     }
     if (parsed.references.length === 0) {
-      editor.addToHistory(text)
+      recordHistory(value)
       editor.setText('')
       dispatchMessage([{ type: 'text', text: parsed.text }])
       return
@@ -1826,7 +1940,7 @@ export function createTuiChat(
       controller.signal,
     ).then((prepared) => {
       if (disposed) return
-      editor.addToHistory(text)
+      recordHistory(value)
       if (editor.getText() === value) editor.setText('')
       // The snapshot travels with the prompt so a blocking admission hook
       // discards them together — see dispatchMessage's attached-context path.
@@ -1845,42 +1959,42 @@ export function createTuiChat(
 
   const removeInputListener = ui.addInputListener((data) => {
     if (overlayManager.hasActiveOverlay()) return undefined
-    if (matchesKey(data, Key.ctrl('t'))) {
-      showCards()
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.ctrl('o'))) {
-      toggleTools()
-      return { consume: true }
-    }
-    if (handleReasoningShortcut(data, reasoningFold, setReasoningFold)) {
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.ctrl('l'))) {
-      ui.invalidate()
-      ui.requestRender(true)
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.escape) && agent.status === 'running') {
-      agent.cancel({ kind: 'user' })
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.ctrl('c'))) {
-      if (agent.status === 'running') {
+    if (subagentStrip.focused) return undefined
+    const action = keymap.resolve(data)
+    if (action === undefined) return undefined
+    switch (action) {
+      case 'cards': showCards(); break
+      case 'tools': toggleTools(); break
+      case 'reasoning': setReasoningFold(nextReasoningFold(reasoningFold)); break
+      case 'redraw': ui.invalidate(); ui.requestRender(true); break
+      case 'cancel':
+        if (agent.status !== 'running') return undefined
         agent.cancel({ kind: 'user' })
-      } else if (editor.getText() !== '') {
-        editor.setText('')
-      } else {
-        requestExit()
-      }
-      return { consume: true }
+        break
+      case 'interruptOrExit':
+        if (agent.status === 'running') agent.cancel({ kind: 'user' })
+        else if (editor.getText() !== '') editor.setText('')
+        else requestExit()
+        break
+      case 'exit':
+        if (agent.status === 'running') appendNotice('Cancel the active turn before exiting.', 'warning')
+        else requestExit()
+        break
+      case 'cyclePermission':
+        void permissionController.cycle().then(
+          () => { if (!disposed) requestRender() },
+          () => { if (!disposed) appendNotice('Permission change failed.', 'error') },
+        )
+        break
+      case 'agents':
+        void focusAgents()
+        break
+      case 'subagentPrev':
+      case 'subagentNext':
+      case 'subagentBack':
+        return undefined // owned only by the focused strip
     }
-    if (matchesKey(data, Key.ctrl('d'))) {
-      if (agent.status === 'running') appendNotice('Cancel the active turn before exiting.', 'warning')
-      else requestExit()
-      return { consume: true }
-    }
-    return undefined
+    return { consume: true }
   })
 
   const disposeSessionEvents = ctx.on('session/event', (session, event) => {
@@ -1968,6 +2082,7 @@ export function createTuiChat(
   })
 
   const detachListeners = (): void => {
+    subagentSwitcher.dispose()
     skillAbort.abort()
     fileSearch.dispose()
     removeInputListener()
@@ -2018,6 +2133,9 @@ export function createTuiChat(
   }
 
   rebuildTranscript(true)
+  replayHistory = [...editor.history]
+  const persistedHistory = refreshHistory()
+  if (persistedHistory !== undefined && persistedHistory.length > 0) editor.replaceHistory(persistedHistory)
   const restoredGoal = foldGoal(agent.session.snapshotEvents()).goal
   /* v8 ignore next -- goal replay coverage lives with the goal seam; the TUI only formats its startup notice. */
   if (restoredGoal !== undefined && restoredGoal.phase !== 'complete') {

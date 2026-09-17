@@ -574,6 +574,8 @@ export class Editor implements Component, Focusable {
   undoStack = new UndoStack()
   onSubmit?: (value: string) => void
   onChange?: (value: string) => void
+  /** dsh-tui supplies a fresh history snapshot before a new Up sequence. */
+  onHistoryNavigationStart?: () => readonly string[] | undefined
   disableSubmit = false
 
   constructor(tui: TUI, theme: EditorTheme, options: EditorOptions = {}) {
@@ -660,7 +662,13 @@ export class Editor implements Component, Focusable {
     if (!trimmed) return
     if (this.history.length > 0 && this.history[0] === trimmed) return
     this.history.unshift(trimmed)
-    if (this.history.length > 100) this.history.pop()
+    if (this.history.length > 500) this.history.pop()
+  }
+
+  /** Replace the idle history snapshot without changing the unsent draft. */
+  replaceHistory(entries: readonly string[]): void {
+    if (this.historyIndex !== -1) return
+    this.history = entries.filter(text => text.trim() !== '').slice(0, 500)
   }
 
   isEditorEmpty(): boolean {
@@ -679,6 +687,10 @@ export class Editor implements Component, Focusable {
 
   navigateHistory(direction: number): void {
     this.lastAction = null
+    if (direction < 0 && this.historyIndex === -1) {
+      const refreshed = this.onHistoryNavigationStart?.()
+      if (refreshed !== undefined) this.replaceHistory(refreshed)
+    }
     if (this.history.length === 0) return
     const newIndex = this.historyIndex - direction
     if (newIndex < -1 || newIndex >= this.history.length) return

@@ -15,7 +15,9 @@ import {
 } from '@deepseek-ai/dsh-user-questions'
 import type { TuiOverlaySession } from '../extension/types.ts'
 import { QuestionDialog } from '../components/dialogs.ts'
+import { isPlanReviewQuestion, PlanReviewPanel } from '../components/plan-panel.ts'
 import type { ChatChannelDeps } from './channel.ts'
+import { QuestionNotifier } from './notify.ts'
 
 /** One queued or active ask-user-question request and its running answers. */
 interface PendingQuestion {
@@ -32,6 +34,8 @@ interface PendingQuestion {
 export interface QuestionQueueDeps extends ChatChannelDeps {
   /** Current row budget after reserving the editor. */
   questionMaxHeight(): number
+  /** Raw terminal write path, outside the render tree. */
+  writeTerminal(bytes: string): void
 }
 
 /** Ask-user-question controller for one chat channel. */
@@ -50,6 +54,8 @@ export interface QuestionQueue {
 export function createQuestionQueue(deps: QuestionQueueDeps): QuestionQueue {
   const { ctx, resolved, palette, overlayManager } = deps
   const questionQueue: PendingQuestion[] = []
+  const notifier = new QuestionNotifier(deps.writeTerminal, resolved.notifications)
+  notifier.baseline(questionQueue)
   let activeQuestion: PendingQuestion | undefined
 
   const removeAbortListener = (pending: PendingQuestion): void => {
@@ -82,7 +88,9 @@ export function createQuestionQueue(deps: QuestionQueueDeps): QuestionQueue {
       }
       const session = overlayManager.open({
         ...pending.request.signal === undefined ? {} : { signal: pending.request.signal },
-        create: () => new QuestionDialog(
+        create: () => {
+          const Dialog = isPlanReviewQuestion(question) ? PlanReviewPanel : QuestionDialog
+          const dialog = new Dialog(
           question,
           pending.index + 1,
           pending.request.questions.length,
@@ -102,7 +110,15 @@ export function createQuestionQueue(deps: QuestionQueueDeps): QuestionQueue {
             rejectQuestion(pending)
             startNextQuestion()
           },
-        ),
+          )
+          // open() invokes create synchronously for an immediately active
+          // overlay and later for a queued one. Defer until its session handle
+          // exists, then signal only if it still owns focus.
+          queueMicrotask(() => {
+            if (pending.overlay?.state === 'active' && !deps.isDisposed()) notifier.actionable(pending)
+          })
+          return dialog
+        },
         options: {
           width: resolved.questionDialogWidth,
           maxHeight: resolved.questionDialogMaxHeight,
@@ -159,6 +175,7 @@ export function createQuestionQueue(deps: QuestionQueueDeps): QuestionQueue {
 
   return {
     rejectAll(): void {
+      notifier.dispose()
       if (activeQuestion !== undefined) {
         const pending = activeQuestion
         activeQuestion = undefined
