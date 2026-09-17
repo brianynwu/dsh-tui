@@ -9,10 +9,15 @@ export declare const DEFAULT_KEYS: Readonly<{
     readonly interruptOrExit: "ctrl+c";
     readonly exit: "ctrl+d";
     readonly cyclePermission: "shift+tab";
+    readonly agents: "ctrl+g";
+    readonly subagentPrev: "left";
+    readonly subagentNext: "right";
+    readonly subagentBack: "escape";
 }>;
 export type TuiAction = keyof typeof DEFAULT_KEYS;
 export type TuiKeyBindings = Partial<Record<TuiAction, string>>;
 export type ResolvedTuiKeys = Readonly<Record<TuiAction, KeyId>>;
+export type TuiKeyContext = 'composer' | 'subagentStrip' | 'modal';
 /** Validate and canonicalize pi-tui's KeyId grammar before passing it to matchesKey. */
 export declare function parseBinding(value: string): KeyId;
 /** Reject an entire replacement map if any binding is invalid or a safety action is unreachable. */
@@ -23,6 +28,6 @@ export declare class TuiKeymap {
     constructor(overrides?: Record<string, string>);
     replace(overrides: Record<string, string>): void;
     binding(action: TuiAction): KeyId;
-    resolve(data: string, context?: 'composer' | 'modal'): TuiAction | undefined;
+    resolve(data: string, context?: TuiKeyContext): TuiAction | undefined;
 }
 //# sourceMappingURL=keymap.d.ts.map
