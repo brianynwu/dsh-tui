@@ -1,8 +1,8 @@
 /**
  * The status line above the editor is EMPTY by default — every metric moved to the
  * dashboard pane (CWD/Session/Model/Branch in the meta column; tokens/cache/context
- * and Provider/Cost in their groups). The prompt values stay registered so a custom
- * template can still reference them. These tests pin the empty default left prompt
+ * and Provider/Cost in their groups). The permission mode remains visible above
+ * the editor. These tests pin the default left prompt
  * and the `${session}` value's still-supported interpolation; live rendering/placement
  * is covered by
  * attended live-verify, and `${context}`'s population depends on the model's
@@ -20,9 +20,9 @@ function valueNames(template: string): string[] {
 }
 
 describe('default status line composition', () => {
-  it('leaves the left prompt EMPTY by default (every metric moved to the dashboard pane)', () => {
-    expect(resolveTuiConfig(undefined).theme.leftPrompt).toBe('')
-    expect(valueNames(resolveTuiConfig(undefined).theme.leftPrompt)).toEqual([])
+  it('shows permission by default while metrics stay in the dashboard pane', () => {
+    expect(resolveTuiConfig(undefined).theme.leftPrompt).toBe('${permission}')
+    expect(valueNames(resolveTuiConfig(undefined).theme.leftPrompt)).toEqual(['permission'])
   })
 
   it('respects a user override through the resolver path (cwd/session still referenceable)', () => {

@@ -11,6 +11,7 @@ import {
   DEFAULT_FILE_SEARCH_MAX_ENTRIES,
   DEFAULT_FILE_SEARCH_MAX_RESULTS,
 } from './chat/file-autocomplete.ts'
+import { resolveKeymap, type ResolvedTuiKeys } from './chat/keymap.ts'
 
 /** Theme and prompt-template settings for the pi-tui terminal mode. */
 export interface TuiThemeConfig {
@@ -30,6 +31,8 @@ export interface TuiThemeConfig {
 
 /** Interaction and presentation settings for the pi-tui terminal mode. */
 export interface TuiConfig {
+  /** Composer shortcut overrides by action name. Invalid replacements are rejected as a whole. */
+  keys?: Record<string, string>
   /** Legacy reasoning visibility alias; `reasoningFold` takes precedence. */
   showReasoning?: boolean
   /** Reasoning display at startup. Unset preserves the legacy `showReasoning` setting. */
@@ -99,13 +102,9 @@ const showHardwareCursorSchema = z.boolean().default(false)
 const colorSchema = z.boolean().default(true)
 // No default: an unset value auto-detects truecolor from COLORTERM in `apply`.
 const truecolorSchema = z.boolean()
-// The status line above the editor is EMPTY by default: the runtime dashboard pane
-// now owns every metric — CWD/Session ID/Model/Branch (its `meta` column), the token
-// meter/cache/context% (Tokens + Context groups), and Provider/Cost (stacked in the
-// Context column). All the prompt values (cwd/session/model/git/worktree/token_meter/
-// cache_hit_rate/context) stay registered so a custom `theme.leftPrompt` can still
-// reference any of them.
-const DEFAULT_LEFT_PROMPT = ''
+// The dashboard owns metrics; this compact status fragment keeps the active
+// permission preset visible by default, including after an external change.
+const DEFAULT_LEFT_PROMPT = '${permission}'
 const DEFAULT_RIGHT_PROMPT = '${queued}'
 const DEFAULT_INPUT_PROMPT = '${symbol} ${indicator}'
 const DEFAULT_INPUT_PLACEHOLDER = 'press enter to steer and esc to cancel'
@@ -122,6 +121,7 @@ const TuiThemeConfigSchema: z<TuiThemeConfig> = z.object({
 const titleSchema = z.string().default('DeepSeek Harness')
 
 const tuiConfigSchemaFields = {
+  keys: z.dict(z.string()),
   showReasoning: showReasoningSchema,
   reasoningFold: reasoningFoldSchema,
   toolCardVisibility: toolCardVisibilitySchema,
@@ -178,6 +178,7 @@ export const Config: z<Config> = z.object({
   sessionId: z.string().default('main'),
   initialSkill: z.string(),
   resumeHint: z.string().default(DEFAULT_RESUME_HINT),
+  keys: tuiConfigSchemaFields.keys,
   showReasoning: tuiConfigSchemaFields.showReasoning,
   reasoningFold: tuiConfigSchemaFields.reasoningFold,
   toolCardVisibility: tuiConfigSchemaFields.toolCardVisibility,
@@ -211,6 +212,7 @@ export interface ResolvedTuiThemeConfig {
 
 /** Fully defaulted TUI presentation settings. */
 export interface ResolvedTuiConfig {
+  keys: ResolvedTuiKeys
   reasoningFold: ReasoningFold
   toolCardVisibility: 'hidden' | 'collapsed' | 'expanded'
   maxToolOutputLines: number
@@ -240,6 +242,7 @@ export interface ResolvedTuiConfig {
  */
 export function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConfig {
   return {
+    keys: resolveKeymap(config?.keys),
     reasoningFold: config?.reasoningFold ?? ((config?.showReasoning ?? true) ? 'full' : 'off'),
     toolCardVisibility: config?.toolCardVisibility ?? 'collapsed',
     maxToolOutputLines: config?.maxToolOutputLines ?? 6,

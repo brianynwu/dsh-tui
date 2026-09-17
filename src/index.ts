@@ -8,13 +8,11 @@
 import {
   CombinedAutocompleteProvider,
   Container,
-  Key,
   Spacer,
   Text,
   TuiAltScreen,
   ProcessTerminal,
   getKeybindings,
-  matchesKey,
   visibleWidth,
   type Component,
   type SlashCommand,
@@ -56,6 +54,7 @@ import type SkillRegistry from '@deepseek-ai/dsh-skill'
 // Type import declaration-merges the `userQuestions` service onto `Context`;
 // the ask-user-question queue is registered by ./chat/questions.
 import type {} from '@deepseek-ai/dsh-user-questions'
+import type {} from '@deepseek-ai/dsh-permission-presets'
 import {
   TuiExtensionServiceImpl,
   TuiOverlayManager,
@@ -105,7 +104,9 @@ import {
   type Config,
   type ReasoningFold,
 } from './config.ts'
-import { applyDetailsArguments, createQuietCommand, handleReasoningShortcut } from './chat/details.ts'
+import { applyDetailsArguments, createQuietCommand, nextReasoningFold } from './chat/details.ts'
+import { TuiKeymap } from './chat/keymap.ts'
+import { createPermissionModeController, type PermissionModeController } from './chat/permission-mode.ts'
 import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
@@ -239,7 +240,7 @@ export abstract class TuiExtensionService extends Service {
 }
 
 export const name = 'ui-tui'
-export const inject = ['agents', 'sessions', 'commands', 'userQuestions', 'tools', 'llm', 'systemPrompt', 'tokenMeter', 'tuiPrompt']
+export const inject = ['agents', 'sessions', 'commands', 'userQuestions', 'tools', 'llm', 'systemPrompt', 'tokenMeter', 'tuiPrompt', 'permissionPresets']
 
 /** Model guidance for path-only file references selected through the TUI. */
 export const FILE_REFERENCE_PROMPT = 'Paths prefixed with @ are files explicitly referenced by the user. Use the read tool when their contents are needed; do not claim to have inspected a file before reading it.'
@@ -307,6 +308,7 @@ export function createTuiChat(
   const agent = ctx.agents.get(sessionId)
   if (agent === undefined) throw new Error(`ui-tui: session "${sessionId}" is not running`)
   const resolved = resolveTuiConfig(config)
+  const keymap = new TuiKeymap(resolved.keys)
   const palette = createPalette(resolved.theme.color)
   const mdTheme = markdownTheme(palette)
   // Alternate-screen renderer: the TUI owns a full-screen, self-scrolling,
@@ -414,6 +416,7 @@ export function createTuiChat(
   // `updatePromptValues()` call until after the assignment so no read precedes it.
   // oxlint-disable-next-line prefer-const -- single assignment is a forward-reference, not a const.
   let modelController!: ModelController
+  let permissionController!: PermissionModeController
   const now = (): number => runtime.now?.() ?? Date.now()
   const agentStatus = (): AgentStatus => agent.status
   const isDisposed = (): boolean => disposed
@@ -434,15 +437,16 @@ export function createTuiChat(
     ctx.tuiPrompt.register('git/worktree', branch === undefined ? undefined : palette.dim(` (${displayText(branch)})`)),
     ctx.tuiPrompt.register('token_meter/cache_hit_rate'),
     ctx.tuiPrompt.register('model'),
+    ctx.tuiPrompt.register('permission'),
     ctx.tuiPrompt.register('context'),
     ctx.tuiPrompt.register('session'),
     ctx.tuiPrompt.register('queued'),
     ctx.tuiPrompt.register('symbol', palette.bold(palette.accent('dsh'))),
     ctx.tuiPrompt.register('indicator', palette.dim('> ')),
   ]
-  const [cwdValue, gitValue, tokenValue, modelValue, contextValue, sessionValue, queuedValue, symbolValue, indicatorValue] = promptValues
+  const [cwdValue, gitValue, tokenValue, modelValue, permissionValue, contextValue, sessionValue, queuedValue, symbolValue, indicatorValue] = promptValues
   /* v8 ignore next -- the fixed built-in registration list always supplies each handle. */
-  if (cwdValue === undefined || gitValue === undefined || tokenValue === undefined || modelValue === undefined
+  if (cwdValue === undefined || gitValue === undefined || tokenValue === undefined || modelValue === undefined || permissionValue === undefined
     || contextValue === undefined || sessionValue === undefined || queuedValue === undefined || symbolValue === undefined || indicatorValue === undefined) {
     throw new Error('TUI prompt built-ins failed to initialize')
   }
@@ -533,6 +537,7 @@ export function createTuiChat(
     const rate = cacheHitRate(tokens)
     const usage = `↑${formatTokens(tokens.input)} ↓${formatTokens(tokens.output)}`
     modelValue.set(`  ${palette.dim(displayText(target.current === undefined ? 'model unset' : compactTargetLabel(target.current)))}`)
+    permissionValue.set(permissionController.label())
     tokenValue.set(`  ${palette.dim(rate === undefined ? usage : `${usage}  cache ${rate}%`)}`)
     const contextWindow = modelController.contextWindow()
     const usedContext = Math.max(0, Math.round(ctx.tokenMeter.measure(agent.session).totalTokens))
@@ -688,6 +693,14 @@ export function createTuiChat(
   })
 
   const disposeTargetListeners = installModelSelection(agent.ctx, target)
+
+  permissionController = createPermissionModeController(
+    ctx.permissionPresets,
+    agent.session,
+    palette,
+    async text => { await runCommand(text) },
+    text => appendNotice(text, 'warning'),
+  )
 
   modelController = createModelController({
     ctx,
@@ -1395,6 +1408,7 @@ export function createTuiChat(
     chat.addChild(new Text([
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
       'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
+      'Shift+Tab cycle permission (model picker: cycle effort)',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
       '',
       ...commandLines,
@@ -1443,6 +1457,7 @@ export function createTuiChat(
         ['Title', displayText(sessionTitle ?? 'untitled')],
         ['Directory', displayText(cwd)],
         ['Model', `${model} ${palette.dim(`(effort ${effort}; reasoning ${reasoningFold})`)}`],
+        ['Permission', displayText(permissionController.current())],
       ],
       [
         ['Agent', [
@@ -1633,10 +1648,10 @@ export function createTuiChat(
     })
   })
 
-  const runCommand = (text: string): void => {
+  const runCommand = (text: string): Promise<void> => {
     const controller = new AbortController()
     commandControllers.add(controller)
-    void ctx.commands.execute(agent, text, [], controller.signal).then(
+    return ctx.commands.execute(agent, text, [], controller.signal).then(
       (execution) => {
         if (disposed) return
         if (execution === undefined) {
@@ -1845,42 +1860,34 @@ export function createTuiChat(
 
   const removeInputListener = ui.addInputListener((data) => {
     if (overlayManager.hasActiveOverlay()) return undefined
-    if (matchesKey(data, Key.ctrl('t'))) {
-      showCards()
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.ctrl('o'))) {
-      toggleTools()
-      return { consume: true }
-    }
-    if (handleReasoningShortcut(data, reasoningFold, setReasoningFold)) {
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.ctrl('l'))) {
-      ui.invalidate()
-      ui.requestRender(true)
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.escape) && agent.status === 'running') {
-      agent.cancel({ kind: 'user' })
-      return { consume: true }
-    }
-    if (matchesKey(data, Key.ctrl('c'))) {
-      if (agent.status === 'running') {
+    const action = keymap.resolve(data)
+    if (action === undefined) return undefined
+    switch (action) {
+      case 'cards': showCards(); break
+      case 'tools': toggleTools(); break
+      case 'reasoning': setReasoningFold(nextReasoningFold(reasoningFold)); break
+      case 'redraw': ui.invalidate(); ui.requestRender(true); break
+      case 'cancel':
+        if (agent.status !== 'running') return undefined
         agent.cancel({ kind: 'user' })
-      } else if (editor.getText() !== '') {
-        editor.setText('')
-      } else {
-        requestExit()
-      }
-      return { consume: true }
+        break
+      case 'interruptOrExit':
+        if (agent.status === 'running') agent.cancel({ kind: 'user' })
+        else if (editor.getText() !== '') editor.setText('')
+        else requestExit()
+        break
+      case 'exit':
+        if (agent.status === 'running') appendNotice('Cancel the active turn before exiting.', 'warning')
+        else requestExit()
+        break
+      case 'cyclePermission':
+        void permissionController.cycle().then(
+          () => { if (!disposed) requestRender() },
+          () => { if (!disposed) appendNotice('Permission change failed.', 'error') },
+        )
+        break
     }
-    if (matchesKey(data, Key.ctrl('d'))) {
-      if (agent.status === 'running') appendNotice('Cancel the active turn before exiting.', 'warning')
-      else requestExit()
-      return { consume: true }
-    }
-    return undefined
+    return { consume: true }
   })
 
   const disposeSessionEvents = ctx.on('session/event', (session, event) => {
