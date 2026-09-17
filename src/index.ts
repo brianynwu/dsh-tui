@@ -688,10 +688,10 @@ export function createTuiChat(
     onError: message => appendNotice(message, 'warning'),
   })
   const focusAgents = async (): Promise<void> => {
-    await subagentSwitcher.refresh()
+    const opened = await subagentSwitcher.open()
     if (disposed) return
-    if (!subagentStrip.hasChildren()) {
-      appendNotice('No child agents to view.', 'warning')
+    if (!opened) {
+      if (!subagentStrip.hasChildren()) appendNotice('No child agents to view.', 'warning')
       return
     }
     ui.setFocus(subagentStrip)
