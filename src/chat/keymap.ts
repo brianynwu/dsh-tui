@@ -5,6 +5,7 @@ export const DEFAULT_KEYS = Object.freeze({
   cards: 'ctrl+t',
   tools: 'ctrl+o',
   reasoning: 'ctrl+r',
+  context: 'alt+c',
   redraw: 'ctrl+l',
   cancel: 'escape',
   interruptOrExit: 'ctrl+c',
@@ -22,8 +23,10 @@ export type ResolvedTuiKeys = Readonly<Record<TuiAction, KeyId>>
 export type TuiKeyContext = 'composer' | 'subagentBrowser' | 'modal'
 
 const actions = Object.keys(DEFAULT_KEYS) as TuiAction[]
-const browserActions: readonly TuiAction[] = ['subagentPrev', 'subagentNext', 'subagentBack']
-const composerActions = actions.filter(action => !browserActions.includes(action))
+const browserOnlyActions: readonly TuiAction[] = ['subagentPrev', 'subagentNext', 'subagentBack']
+const sharedDetailsActions: readonly TuiAction[] = ['tools', 'reasoning', 'context']
+const browserActions: readonly TuiAction[] = [...browserOnlyActions, ...sharedDetailsActions]
+const composerActions = actions.filter(action => !browserOnlyActions.includes(action))
 const modifierOrder = ['shift', 'ctrl', 'alt', 'super'] as const
 const modifiers = new Set<string>(modifierOrder)
 const specialKeys = new Map<string, string>([
@@ -66,9 +69,12 @@ export function resolveKeymap(overrides: Record<string, string> | undefined): Re
   const occupied = { composer: new Set<KeyId>(), subagentBrowser: new Set<KeyId>() }
   for (const action of actions) {
     const binding = parseBinding(map[action])
-    const context = browserActions.includes(action) ? 'subagentBrowser' : 'composer'
-    if (occupied[context].has(binding)) throw new Error(`Duplicate TUI key binding: ${binding}`)
-    occupied[context].add(binding)
+    for (const context of (browserActions.includes(action) && composerActions.includes(action)
+      ? ['composer', 'subagentBrowser'] : browserActions.includes(action) ? ['subagentBrowser'] : ['composer']) as TuiKeyContext[]) {
+      if (context === 'modal') continue
+      if (occupied[context].has(binding)) throw new Error(`Duplicate TUI key binding: ${binding}`)
+      occupied[context].add(binding)
+    }
     resolved[action] = binding
   }
   // The same chord may have distinct owners in mutually exclusive contexts.

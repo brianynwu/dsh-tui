@@ -9,7 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo';
-import type { ReasoningFold } from '../config.ts';
+import type { ContextVisibility, ReasoningFold } from '../config.ts';
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 import { type Palette } from './theme.ts';
 import { type ParsedArguments } from './content.ts';
@@ -218,7 +218,7 @@ export declare class ToolCardComponent extends CachedCardComponent {
 }
 /**
  * Injected context (plugin/goal source, e.g. `workspace-context`), rendered as a
- * collapsible dim card that shares the tool-card `Ctrl+O` toggle. The header is
+ * separately controllable dim card. The header is
  * `Context · <label>`; the body is the message text as dim prose, one tone with
  * the header and the fold marker, folded to `maxOutputLines`, with a surrounding
  * reminder frame stripped because the source label already names the context.
@@ -237,13 +237,10 @@ export declare class ContextCardComponent extends CachedCardComponent {
     private readonly text;
     private readonly maxOutputLines;
     private readonly palette;
-    private expanded;
+    private visibility;
     constructor(label: string, text: string, maxOutputLines: number, palette: Palette);
-    /**
-     * Expand or collapse the card body.
-     * @param expanded - Whether the full body is shown.
-     */
-    setExpanded(expanded: boolean): void;
+    /** Set hidden, preview, or full context display. */
+    setVisibility(visibility: ContextVisibility): void;
     protected renderLines(width: number): string[];
 }
 /** The plan/todo panel rendered above the prompt. */

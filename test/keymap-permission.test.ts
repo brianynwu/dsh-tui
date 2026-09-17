@@ -10,6 +10,10 @@ describe('composer keymap', () => {
     expect(keys.resolve('\x14')).toBe('cards')
     expect(keys.resolve('\x0f')).toBe('tools')
     expect(keys.resolve('\x12')).toBe('reasoning')
+    expect(keys.resolve('\x1bc')).toBe('context')
+    expect(keys.resolve('\x0f', 'subagentBrowser')).toBe('tools')
+    expect(keys.resolve('\x12', 'subagentBrowser')).toBe('reasoning')
+    expect(keys.resolve('\x1bc', 'subagentBrowser')).toBe('context')
     expect(keys.resolve('\x0c')).toBe('redraw')
     expect(keys.resolve('\x1b')).toBe('cancel')
     expect(keys.resolve('\x03')).toBe('interruptOrExit')
@@ -17,6 +21,7 @@ describe('composer keymap', () => {
     expect(keys.resolve('\x1b[Z')).toBe('cyclePermission')
     expect(keys.resolve('\x1b[Z', 'modal')).toBeUndefined()
     expect(keys.resolve('\x1b', 'modal')).toBeUndefined()
+    expect(keys.resolve('\x1bc', 'modal')).toBeUndefined()
   })
 
   it('remaps atomically and retains the prior safety routes on invalid reload', () => {
@@ -37,6 +42,7 @@ describe('composer keymap', () => {
     }
     expect(() => resolveKeymap({ nonexistent: 'ctrl+x' })).toThrow(/Unknown/)
     expect(() => resolveKeymap({ cancel: 'esc', exit: 'escape' })).toThrow(/Duplicate/)
+    expect(() => resolveKeymap({ context: 'left' })).toThrow(/Duplicate/)
   })
 })
 

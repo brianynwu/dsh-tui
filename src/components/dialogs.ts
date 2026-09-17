@@ -29,8 +29,8 @@ import type { AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions'
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START, displayText, sanitizePastedText } from './text.ts'
 import { dialogSelectTheme, type Palette } from './theme.ts'
 import type { ToolCardVisibility } from './transcript.ts'
-import type { ReasoningFold } from '../config.ts'
-import { nextReasoningFold } from '../chat/details.ts'
+import type { ContextVisibility, ReasoningFold } from '../config.ts'
+import { nextContextVisibility, nextReasoningFold } from '../chat/details.ts'
 import {
   renderTuiPromptTemplate,
   type TuiPromptTemplateToken,
@@ -429,17 +429,17 @@ export class ModelDialog implements Component {
   }
 }
 
-/** Both transcript-detail dimensions, applied immediately on each Tab. */
+/** All transcript-detail dimensions, applied immediately on each Tab. */
 export interface DetailsSelection {
   readonly tools: ToolCardVisibility
   readonly reasoning: ReasoningFold
+  readonly context: ContextVisibility
 }
 
 const TOOL_CARD_PHASES: readonly ToolCardVisibility[] = ['collapsed', 'expanded', 'hidden']
 
 /**
- * Keyboard toggle over the two transcript-detail entries — tool-card
- * visibility and reasoning display. Tab cycles the highlighted entry's value
+ * Keyboard toggle over tool-card, reasoning, and context display. Tab cycles the highlighted entry's value
  * and applies it immediately, so the transcript behind the dialog is the live
  * preview; Enter, Esc, or Ctrl+C closes.
  */
@@ -447,17 +447,20 @@ export class DetailsDialog implements Component {
   private readonly list: SelectList
   private readonly toolsItem: SelectItem
   private readonly reasoningItem: SelectItem
+  private readonly contextItem: SelectItem
 
   constructor(
     private visibility: ToolCardVisibility,
     private reasoningFold: ReasoningFold,
+    private contextVisibility: ContextVisibility,
     private readonly palette: Palette,
     private readonly apply: (selection: DetailsSelection) => void,
     private readonly close: () => void,
   ) {
     this.toolsItem = { value: 'tools', label: 'Tool cards', description: visibility }
     this.reasoningItem = { value: 'reasoning', label: 'Reasoning', description: reasoningFold }
-    this.list = new SelectList([this.toolsItem, this.reasoningItem], 2, dialogSelectTheme(palette))
+    this.contextItem = { value: 'context', label: 'Context', description: contextVisibility }
+    this.list = new SelectList([this.toolsItem, this.reasoningItem, this.contextItem], 3, dialogSelectTheme(palette))
     this.list.onSelect = close
   }
 
@@ -470,11 +473,14 @@ export class DetailsDialog implements Component {
       const index = TOOL_CARD_PHASES.indexOf(this.visibility)
       this.visibility = TOOL_CARD_PHASES[(index + 1) % TOOL_CARD_PHASES.length] as ToolCardVisibility
       this.toolsItem.description = this.visibility
-    } else {
+    } else if (selected.value === 'reasoning') {
       this.reasoningFold = nextReasoningFold(this.reasoningFold)
       this.reasoningItem.description = this.reasoningFold
+    } else {
+      this.contextVisibility = nextContextVisibility(this.contextVisibility)
+      this.contextItem.description = this.contextVisibility
     }
-    this.apply({ tools: this.visibility, reasoning: this.reasoningFold })
+    this.apply({ tools: this.visibility, reasoning: this.reasoningFold, context: this.contextVisibility })
   }
 
   invalidate(): void {

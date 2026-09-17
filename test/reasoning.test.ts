@@ -79,30 +79,39 @@ describe('reasoning controls', () => {
 
   it('the Details dialog cycles all three reasoning states and emits each selection', () => {
     const applied: DetailsSelection[] = []
-    const dialog = new DetailsDialog('collapsed', 'full', palette, selection => { applied.push(selection) }, () => {})
+    const dialog = new DetailsDialog('collapsed', 'full', 'collapsed', palette, selection => { applied.push(selection) }, () => {})
     dialog.handleInput('\x1b[B')
     for (const expected of ['off', 'preview', 'full'] as const) {
       dialog.handleInput('\t')
-      expect(applied.at(-1)).toEqual({ tools: 'collapsed', reasoning: expected })
+      expect(applied.at(-1)).toEqual({ tools: 'collapsed', reasoning: expected, context: 'collapsed' })
     }
     dialog.handleInput('\x1b[A')
     dialog.handleInput('\t')
-    expect(applied.at(-1)).toEqual({ tools: 'expanded', reasoning: 'full' })
+    expect(applied.at(-1)).toEqual({ tools: 'expanded', reasoning: 'full', context: 'collapsed' })
+    dialog.handleInput('\x1b[B')
+    dialog.handleInput('\x1b[B')
+    dialog.handleInput('\t')
+    expect(applied.at(-1)).toEqual({ tools: 'expanded', reasoning: 'full', context: 'expanded' })
+    dialog.handleInput('\t')
+    expect(applied.at(-1)?.context).toBe('hidden')
+    dialog.handleInput('\t')
+    expect(applied.at(-1)?.context).toBe('collapsed')
   })
 
   it('/details applies valid pairs and legacy on/off aliases, with no partial apply on errors', () => {
     const calls: string[] = []
     const tools = (value: string): void => { calls.push(`tools:${value}`) }
     const reasoning = (value: ReasoningFold): void => { calls.push(`reasoning:${value}`) }
-    expect(applyDetailsArguments('hidden reasoning preview', tools, reasoning)).toEqual({ kind: 'success' })
-    expect(calls).toEqual(['reasoning:preview', 'tools:hidden'])
-    expect(applyDetailsArguments('reasoning on', tools, reasoning)).toEqual({ kind: 'success' })
-    expect(applyDetailsArguments('reasoning off', tools, reasoning)).toEqual({ kind: 'success' })
-    expect(calls.slice(2)).toEqual(['reasoning:full', 'reasoning:off'])
+    const context = (value: string): void => { calls.push(`context:${value}`) }
+    expect(applyDetailsArguments('hidden reasoning preview context hidden', tools, reasoning, context)).toEqual({ kind: 'success' })
+    expect(calls).toEqual(['reasoning:preview', 'tools:hidden', 'context:hidden'])
+    expect(applyDetailsArguments('reasoning on', tools, reasoning, context)).toEqual({ kind: 'success' })
+    expect(applyDetailsArguments('reasoning off', tools, reasoning, context)).toEqual({ kind: 'success' })
+    expect(calls.slice(3)).toEqual(['reasoning:full', 'reasoning:off'])
 
-    for (const invalid of ['hidden nonsense', 'hidden reasoning bogus', 'hidden reasoning']) {
+    for (const invalid of ['hidden nonsense', 'hidden reasoning bogus', 'hidden reasoning', 'hidden context bogus', 'context']) {
       const before = calls.length
-      expect(applyDetailsArguments(invalid, tools, reasoning).kind).toBe('error')
+      expect(applyDetailsArguments(invalid, tools, reasoning, context).kind).toBe('error')
       expect(calls).toHaveLength(before)
     }
   })

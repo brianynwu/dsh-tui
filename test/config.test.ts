@@ -29,6 +29,23 @@ describe('tool-card startup visibility', () => {
   })
 })
 
+describe('context-card startup visibility', () => {
+  it('defaults to collapsed independently of tool cards', () => {
+    expect(TuiConfigSchema({}).contextVisibility).toBe('collapsed')
+    expect(Config({}).contextVisibility).toBe('collapsed')
+    expect(resolveTuiConfig({ toolCardVisibility: 'expanded' }).contextVisibility).toBe('collapsed')
+  })
+
+  it.each(['hidden', 'collapsed', 'expanded'] as const)('accepts %s through both schemas', visibility => {
+    expect(TuiConfigSchema({ contextVisibility: visibility }).contextVisibility).toBe(visibility)
+    expect(resolveTuiConfig(Config({ contextVisibility: visibility })).contextVisibility).toBe(visibility)
+  })
+
+  it('rejects an invalid mode', () => {
+    expect(() => Config({ contextVisibility: 'off' })).toThrow()
+  })
+})
+
 describe('reasoning fold configuration', () => {
   it('keeps the optional schema field unset while resolving stock to full', () => {
     expect(TuiConfigSchema({}).reasoningFold).toBeUndefined()

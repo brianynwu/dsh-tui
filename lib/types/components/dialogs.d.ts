@@ -13,7 +13,7 @@ import type { SessionRecord } from '@deepseek-ai/dsh-session-query';
 import type { AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions';
 import { type Palette } from './theme.ts';
 import type { ToolCardVisibility } from './transcript.ts';
-import type { ReasoningFold } from '../config.ts';
+import type { ContextVisibility, ReasoningFold } from '../config.ts';
 import { type TuiPromptTemplateToken } from '../prompt.ts';
 /** A selectable model advertised by a provider, with its display name, description, and reasoning metadata. */
 export interface ModelChoice extends ModelSelection {
@@ -144,27 +144,29 @@ export declare class ModelDialog implements Component {
     handleInput(data: string): void;
     render(width: number): string[];
 }
-/** Both transcript-detail dimensions, applied immediately on each Tab. */
+/** All transcript-detail dimensions, applied immediately on each Tab. */
 export interface DetailsSelection {
     readonly tools: ToolCardVisibility;
     readonly reasoning: ReasoningFold;
+    readonly context: ContextVisibility;
 }
 /**
- * Keyboard toggle over the two transcript-detail entries — tool-card
- * visibility and reasoning display. Tab cycles the highlighted entry's value
+ * Keyboard toggle over tool-card, reasoning, and context display. Tab cycles the highlighted entry's value
  * and applies it immediately, so the transcript behind the dialog is the live
  * preview; Enter, Esc, or Ctrl+C closes.
  */
 export declare class DetailsDialog implements Component {
     private visibility;
     private reasoningFold;
+    private contextVisibility;
     private readonly palette;
     private readonly apply;
     private readonly close;
     private readonly list;
     private readonly toolsItem;
     private readonly reasoningItem;
-    constructor(visibility: ToolCardVisibility, reasoningFold: ReasoningFold, palette: Palette, apply: (selection: DetailsSelection) => void, close: () => void);
+    private readonly contextItem;
+    constructor(visibility: ToolCardVisibility, reasoningFold: ReasoningFold, contextVisibility: ContextVisibility, palette: Palette, apply: (selection: DetailsSelection) => void, close: () => void);
     /** Cycle the highlighted entry one step and apply the new state. */
     private cycle;
     invalidate(): void;

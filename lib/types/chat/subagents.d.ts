@@ -6,6 +6,7 @@ import { type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session';
 import type { SubagentListEntry } from '@deepseek-ai/dsh-subagent';
 import { type Palette } from '../components/theme.ts';
 import type { ResolvedTuiConfig } from '../config.ts';
+import type { TranscriptView } from './details.ts';
 export type SubagentOriginType = 'standard' | 'fork' | 'unknown';
 export type SubagentRow = SubagentListEntry & {
     readonly execution?: AgentStatus;
@@ -20,14 +21,20 @@ export declare class ChildTranscript extends Container {
     private readonly resolved;
     private readonly events;
     private readonly tools;
+    private readonly allTools;
+    private readonly contexts;
     private readonly steps;
+    private readonly turnSteps;
     private readonly stream;
     private readonly timing;
     private readonly mdTheme;
     private cursor;
     private activePosition;
-    constructor(childId: SessionId, label: string | undefined, palette: Palette, resolved: ResolvedTuiConfig);
+    private detailsState;
+    constructor(childId: SessionId, label: string | undefined, palette: Palette, resolved: ResolvedTuiConfig, details: TranscriptView);
     get lastSequence(): number;
+    setDetails(details: TranscriptView): void;
+    private applyTurnFolding;
     /** Append exactly the next durable event; duplicates are harmless, gaps request a fresh observation. */
     addEvent(event: SessionEvent): 'added' | 'duplicate' | 'gap';
     replay(events: readonly SessionEvent[]): void;
@@ -38,6 +45,8 @@ export declare class ChildTranscript extends Container {
 export interface SubagentSwitcher {
     readonly rows: readonly SubagentRow[];
     readonly selectedId: SessionId | undefined;
+    readonly details: TranscriptView;
+    setDetails(details: TranscriptView): void;
     refresh(): Promise<void>;
     select(id: SessionId): boolean;
     back(): void;

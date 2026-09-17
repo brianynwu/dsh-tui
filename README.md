@@ -11,8 +11,10 @@ It composes over the official `@deepseek-ai/dsh-base` bundle, so the whole plugi
 - Streaming model output and reasoning, rendered as Markdown
 - Reasoning display: Ctrl+R cycles full → off → three content rows plus an omission cue; `/details reasoning off|preview|full` selects a state directly. Set `reasoningFold` in the TUI config for the startup state (`showReasoning` remains a legacy alias).
 - Tool-call cards with terminal / diff / generic render intents; Ctrl+O cycles collapsed → expanded → hidden
-- `/quiet` hides cards and reasoning for this session; `/quiet off` restores the prior detail settings.
+- Injected context cards (instructions, skills, agent messages, session references): Alt+C cycles collapsed → expanded → hidden independently of tool cards; `/details context hidden|collapsed|expanded` selects a state directly. Set `contextVisibility` in the TUI config for the startup state.
+- `/quiet` hides cards, reasoning, and injected context for this session; `/quiet off` restores the prior detail settings.
 - `/cards` or Ctrl+T opens a read-only browser for every tool card's full output, even when cards are hidden. Use ←/→ to switch cards, ↑/↓ or PgUp/PgDn to scroll, and Esc/q to close.
+- `/agents` or Ctrl+G opens the child-agent picker. Enter shows a read-only child transcript; Ctrl+O, Ctrl+R, and Alt+C adjust that child view, and Esc returns to the picker. Child views initially inherit the main transcript settings when the picker opens.
 - Approval and `ask_user_question` dialogs, plan-mode review included
 - `@file` path autocomplete and `@session` reference cards
 - Slash commands: `/model` (with reasoning-effort selection), `/resume`, `/compact`, `/details`, `/quiet`, `/cards`, `/help`, and every command other plugins register

@@ -2,11 +2,13 @@ import type { TuiOverlayManager } from '../extension/overlay-manager.ts';
 import type { TuiKeymap } from './keymap.ts';
 import type { SubagentRow, SubagentSwitcher } from './subagents.ts';
 import type { Palette } from '../components/theme.ts';
+import type { TranscriptView } from './details.ts';
 export interface AgentsBrowserDeps {
     switcher: SubagentSwitcher;
     overlays: TuiOverlayManager;
     keymap: TuiKeymap;
     palette: Palette;
+    mainDetails(): TranscriptView;
     viewport(): {
         columns: number;
         rows: number;

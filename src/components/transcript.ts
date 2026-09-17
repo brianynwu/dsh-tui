@@ -21,7 +21,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo'
-import type { ReasoningFold } from '../config.ts'
+import type { ContextVisibility, ReasoningFold } from '../config.ts'
 import type {
   TerminalCallView,
   ToolCallView,
@@ -793,7 +793,7 @@ function stripReminderFrame(text: string): string {
 
 /**
  * Injected context (plugin/goal source, e.g. `workspace-context`), rendered as a
- * collapsible dim card that shares the tool-card `Ctrl+O` toggle. The header is
+ * separately controllable dim card. The header is
  * `Context · <label>`; the body is the message text as dim prose, one tone with
  * the header and the fold marker, folded to `maxOutputLines`, with a surrounding
  * reminder frame stripped because the source label already names the context.
@@ -808,7 +808,7 @@ function stripReminderFrame(text: string): string {
  * content-dependent.
  */
 export class ContextCardComponent extends CachedCardComponent {
-  private expanded = false
+  private visibility: ContextVisibility = 'collapsed'
 
   constructor(
     private readonly label: string,
@@ -819,27 +819,25 @@ export class ContextCardComponent extends CachedCardComponent {
     super()
   }
 
-  /**
-   * Expand or collapse the card body.
-   * @param expanded - Whether the full body is shown.
-   */
-  setExpanded(expanded: boolean): void {
-    this.expanded = expanded
+  /** Set hidden, preview, or full context display. */
+  setVisibility(visibility: ContextVisibility): void {
+    this.visibility = visibility
     this.dropLines()
   }
 
   protected renderLines(width: number): string[] {
+    if (this.visibility === 'hidden') return []
     const header = this.palette.dim(`Context · ${displayText(this.label)}`)
     // Emptiness is decided on the stripped text: styling a blank body would yield
     // one escape-only row, which reads as a stray blank line under the header.
     const stripped = stripReminderFrame(this.text)
-    if (stripped === '') return [header]
+    if (stripped === '') return ['', header]
     const body = stripped.split('\n')
       .map(line => line === '' ? line : this.palette.dim(displayText(line)))
-    const visibleBody = this.expanded
+    const visibleBody = this.visibility === 'expanded'
       ? body
-      : preview(body, this.maxOutputLines, count => this.palette.dim(`… +${count} lines (Ctrl+O to expand)`))
-    return [header, ...new Text(visibleBody.join('\n'), 0, 0).render(width)]
+      : preview(body, this.maxOutputLines, count => this.palette.dim(`… +${count} lines (Alt+C to expand)`))
+    return ['', header, ...new Text(visibleBody.join('\n'), 0, 0).render(width)]
   }
 }
 

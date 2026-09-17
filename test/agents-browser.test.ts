@@ -4,6 +4,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { AgentsBrowser } from '../src/chat/agents-browser.ts'
 import { ChildViewSlot } from '../src/chat/child-view.ts'
 import type { SubagentRow, SubagentSwitcher } from '../src/chat/subagents.ts'
+import type { TranscriptView } from '../src/chat/details.ts'
 import { ChildViewKeys } from '../src/components/child-view-keys.ts'
 import { createPalette } from '../src/components/theme.ts'
 import { TuiKeymap } from '../src/chat/keymap.ts'
@@ -30,6 +31,8 @@ describe('assembled /agents navigation', () => {
     let shown: Component | undefined
     const view = new ChildViewSlot(slot, main, scroll, () => { focus = 'composer' }, () => {})
     let selectedId: SessionId | undefined
+    let mainDetails: TranscriptView = { tools: 'hidden', reasoning: 'off', context: 'hidden' }
+    let childDetails: TranscriptView = { tools: 'collapsed', reasoning: 'full', context: 'collapsed' }
     const childId = SessionId('child-1')
     const rows: SubagentRow[] = [{
       kind: 'child', id: childId, mode: 'one-shot', label: 'Read runbook',
@@ -38,6 +41,8 @@ describe('assembled /agents navigation', () => {
     const switcher = {
       get rows() { return rows },
       get selectedId() { return selectedId },
+      get details() { return childDetails },
+      setDetails: vi.fn((details: TranscriptView) => { childDetails = { ...details } }),
       refresh: vi.fn(async () => {}),
       select: vi.fn((id: SessionId) => {
         selectedId = id
@@ -58,19 +63,31 @@ describe('assembled /agents navigation', () => {
       invalidate: () => {}, reportError: vi.fn(),
     })
     let browser!: AgentsBrowser
-    const control = new ChildViewKeys(new TuiKeymap(), () => browser.backFromChild())
+    const control = new ChildViewKeys(new TuiKeymap(), () => browser.backFromChild(), action => {
+      const current = switcher.details
+      switcher.setDetails(action === 'tools' ? { ...current, tools: 'expanded' }
+        : action === 'reasoning' ? { ...current, reasoning: 'preview' }
+          : { ...current, context: 'expanded' })
+    })
     browser = new AgentsBrowser({
       switcher, overlays, keymap: new TuiKeymap(), palette: createPalette(false),
+      mainDetails: () => ({ ...mainDetails }),
       viewport: () => ({ columns: 100, rows: 20 }),
       focusChild: () => { focus = 'child' }, isDisposed: () => false,
     })
 
     await browser.open()
+    expect(childDetails).toEqual(mainDetails)
     expect(focus).toBe('overlay')
     expect(shown?.render(98).join('\n')).toContain('ID child-1')
     shown?.handleInput?.('\r')
     expect(focus).toBe('child')
     expect(slot.children[0]?.render(80).join('\n')).toContain('child 0')
+    control.handleInput('\x0f')
+    control.handleInput('\x12')
+    control.handleInput('\x1bc')
+    expect(childDetails).toEqual({ tools: 'expanded', reasoning: 'preview', context: 'expanded' })
+    expect(mainDetails).toEqual({ tools: 'hidden', reasoning: 'off', context: 'hidden' })
     control.handleInput('\x1b')
     expect(focus).toBe('overlay')
     expect(shown?.render(98).join('\n')).toContain('ID child-1')
@@ -81,6 +98,9 @@ describe('assembled /agents navigation', () => {
     expect(scroll.scrollTop).toBe(7)
     expect(control.render(98)).toEqual([])
     expect(shown).toBeUndefined()
+    mainDetails = { tools: 'collapsed', reasoning: 'full', context: 'expanded' }
+    await browser.open()
+    expect(childDetails).toEqual(mainDetails)
     await overlays.dispose()
   })
 })

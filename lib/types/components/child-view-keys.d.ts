@@ -4,8 +4,9 @@ import type { TuiKeymap } from '../chat/keymap.ts';
 export declare class ChildViewKeys implements Component, Focusable {
     private readonly keymap;
     private readonly back;
+    private readonly changeDetail;
     focused: boolean;
-    constructor(keymap: TuiKeymap, back: () => void);
+    constructor(keymap: TuiKeymap, back: () => void, changeDetail: (action: 'tools' | 'reasoning' | 'context') => void);
     render(_width: number): string[];
     invalidate(): void;
     handleInput(data: string): void;

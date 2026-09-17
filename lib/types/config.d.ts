@@ -33,6 +33,8 @@ export interface TuiConfig {
     reasoningFold?: ReasoningFold;
     /** Tool-card startup visibility; Ctrl+O can still change it for this session. */
     toolCardVisibility?: 'hidden' | 'collapsed' | 'expanded';
+    /** Injected-context card visibility; Alt+C can still change it for this session. */
+    contextVisibility?: ContextVisibility;
     /** Maximum tool-card body lines retained in its collapsed head/tail preview. */
     maxToolOutputLines?: number;
     /** Maximum added and removed lines explored while deriving an exact line diff. */
@@ -70,6 +72,7 @@ export interface TuiConfig {
 }
 /** Reasoning display phases, independent of tool-card visibility. */
 export type ReasoningFold = 'off' | 'preview' | 'full';
+export type ContextVisibility = 'hidden' | 'collapsed' | 'expanded';
 /** Stock exit resume-hint template; `{session}` expands to the minted session id. */
 export declare const DEFAULT_RESUME_HINT = "To resume this session: dsh --profile tui --resume={session}";
 /** Schemastery schema for presentation settings embedded by app bundles. */
@@ -115,6 +118,7 @@ export interface ResolvedTuiConfig {
     notifications: boolean;
     reasoningFold: ReasoningFold;
     toolCardVisibility: 'hidden' | 'collapsed' | 'expanded';
+    contextVisibility: ContextVisibility;
     maxToolOutputLines: number;
     maxDiffEditLength: number;
     maxQuestionOptions: number;

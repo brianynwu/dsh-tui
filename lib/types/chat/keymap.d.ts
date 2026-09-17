@@ -4,6 +4,7 @@ export declare const DEFAULT_KEYS: Readonly<{
     readonly cards: "ctrl+t";
     readonly tools: "ctrl+o";
     readonly reasoning: "ctrl+r";
+    readonly context: "alt+c";
     readonly redraw: "ctrl+l";
     readonly cancel: "escape";
     readonly interruptOrExit: "ctrl+c";

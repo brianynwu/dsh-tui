@@ -41,6 +41,8 @@ export interface TuiConfig {
   reasoningFold?: ReasoningFold
   /** Tool-card startup visibility; Ctrl+O can still change it for this session. */
   toolCardVisibility?: 'hidden' | 'collapsed' | 'expanded'
+  /** Injected-context card visibility; Alt+C can still change it for this session. */
+  contextVisibility?: ContextVisibility
   /** Maximum tool-card body lines retained in its collapsed head/tail preview. */
   maxToolOutputLines?: number
   /** Maximum added and removed lines explored while deriving an exact line diff. */
@@ -79,11 +81,15 @@ export interface TuiConfig {
 
 /** Reasoning display phases, independent of tool-card visibility. */
 export type ReasoningFold = 'off' | 'preview' | 'full'
+export type ContextVisibility = 'hidden' | 'collapsed' | 'expanded'
 
 const showReasoningSchema = z.boolean().default(true)
 // No default: an injected value would mask a legacy showReasoning:false config.
 const reasoningFoldSchema = z.union([z.const('off'), z.const('preview'), z.const('full')])
 const toolCardVisibilitySchema = z.union([
+  z.const('hidden'), z.const('collapsed'), z.const('expanded'),
+]).default('collapsed')
+const contextVisibilitySchema = z.union([
   z.const('hidden'), z.const('collapsed'), z.const('expanded'),
 ]).default('collapsed')
 const maxToolOutputLinesSchema = z.number().step(1).min(1).default(6)
@@ -128,6 +134,7 @@ const tuiConfigSchemaFields = {
   showReasoning: showReasoningSchema,
   reasoningFold: reasoningFoldSchema,
   toolCardVisibility: toolCardVisibilitySchema,
+  contextVisibility: contextVisibilitySchema,
   maxToolOutputLines: maxToolOutputLinesSchema,
   maxDiffEditLength: maxDiffEditLengthSchema,
   maxQuestionOptions: maxQuestionOptionsSchema,
@@ -186,6 +193,7 @@ export const Config: z<Config> = z.object({
   showReasoning: tuiConfigSchemaFields.showReasoning,
   reasoningFold: tuiConfigSchemaFields.reasoningFold,
   toolCardVisibility: tuiConfigSchemaFields.toolCardVisibility,
+  contextVisibility: tuiConfigSchemaFields.contextVisibility,
   maxToolOutputLines: tuiConfigSchemaFields.maxToolOutputLines,
   maxDiffEditLength: tuiConfigSchemaFields.maxDiffEditLength,
   maxQuestionOptions: tuiConfigSchemaFields.maxQuestionOptions,
@@ -220,6 +228,7 @@ export interface ResolvedTuiConfig {
   notifications: boolean
   reasoningFold: ReasoningFold
   toolCardVisibility: 'hidden' | 'collapsed' | 'expanded'
+  contextVisibility: ContextVisibility
   maxToolOutputLines: number
   maxDiffEditLength: number
   maxQuestionOptions: number
@@ -251,6 +260,7 @@ export function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConf
     notifications: config?.notifications ?? true,
     reasoningFold: config?.reasoningFold ?? ((config?.showReasoning ?? true) ? 'full' : 'off'),
     toolCardVisibility: config?.toolCardVisibility ?? 'collapsed',
+    contextVisibility: config?.contextVisibility ?? 'collapsed',
     maxToolOutputLines: config?.maxToolOutputLines ?? 6,
     maxDiffEditLength: config?.maxDiffEditLength ?? 1000,
     maxQuestionOptions: config?.maxQuestionOptions ?? 8,

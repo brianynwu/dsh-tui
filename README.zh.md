@@ -11,8 +11,10 @@
 - 模型输出与思考过程的流式 Markdown 渲染
 - 思考过程显示：Ctrl+R 依次切换完整 → 隐藏 → 三行内容预览（另有省略提示）；`/details reasoning off|preview|full` 可直接选择。TUI 配置中的 `reasoningFold` 指定启动状态（`showReasoning` 保留为旧版别名）。
 - 工具调用卡片（terminal / diff / generic 三种渲染意图）；Ctrl+O 三档切换：预览 → 展开 → 隐藏
-- `/quiet` 在当前会话隐藏工具卡片和思考过程；`/quiet off` 恢复之前的显示设置。
+- 注入的上下文卡片（指令、技能、智能体消息、会话引用）可用 Alt+C 独立切换：预览 → 展开 → 隐藏；`/details context hidden|collapsed|expanded` 可直接选择。TUI 配置中的 `contextVisibility` 指定启动状态。
+- `/quiet` 在当前会话隐藏工具卡片、思考过程和注入的上下文；`/quiet off` 恢复之前的显示设置。
 - `/cards` 或 Ctrl+T 可只读浏览所有工具卡片的完整输出，即使卡片已隐藏。用 ←/→ 切换卡片，↑/↓ 或 PgUp/PgDn 滚动，Esc/q 关闭。
+- `/agents` 或 Ctrl+G 打开子代理选择窗格。Enter 查看只读子代理记录；Ctrl+O、Ctrl+R 和 Alt+C 调整该子代理视图，Esc 返回选择窗格。打开选择窗格时，子代理视图继承主记录的显示设置。
 - 工具审批与 `ask_user_question` 对话框，含 plan 模式评审
 - `@文件` 路径自动补全与 `@session` 会话引用卡片
 - 斜杠命令：`/model`（含推理力度选择）、`/resume`、`/compact`、`/details`、`/quiet`、`/cards`、`/help`，以及其他插件注册的全部命令

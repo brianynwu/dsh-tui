@@ -6,12 +6,14 @@ import type { TuiKeymap } from './keymap.ts'
 import type { SubagentRow, SubagentSwitcher } from './subagents.ts'
 import { SubagentPicker } from '../components/subagent-picker.ts'
 import type { Palette } from '../components/theme.ts'
+import type { TranscriptView } from './details.ts'
 
 export interface AgentsBrowserDeps {
   switcher: SubagentSwitcher
   overlays: TuiOverlayManager
   keymap: TuiKeymap
   palette: Palette
+  mainDetails(): TranscriptView
   viewport(): { columns: number; rows: number }
   focusChild(): void
   isDisposed(): boolean
@@ -24,6 +26,7 @@ export class AgentsBrowser {
   constructor(private readonly deps: AgentsBrowserDeps) {}
 
   async open(): Promise<void> {
+    this.deps.switcher.setDetails(this.deps.mainDetails())
     await this.deps.switcher.refresh()
     if (!this.deps.isDisposed()) this.showPicker()
   }

@@ -14,6 +14,7 @@ import {
   ContextCardComponent, StreamingAssistantComponent, ToolCardComponent, UserMessageComponent,
 } from '../components/transcript.ts'
 import type { ResolvedTuiConfig } from '../config.ts'
+import type { TranscriptView } from './details.ts'
 
 export type SubagentOriginType = 'standard' | 'fork' | 'unknown'
 export type SubagentRow = SubagentListEntry & {
@@ -36,26 +37,56 @@ export function projectSubagents(entries: readonly SubagentListEntry[], ctx: Con
 export class ChildTranscript extends Container {
   private readonly events: SessionEvent[] = []
   private readonly tools = new Map<string, ToolCardComponent>()
+  private readonly allTools = new Set<ToolCardComponent>()
+  private readonly contexts = new Set<ContextCardComponent>()
   private readonly steps = new Map<string, StreamingAssistantComponent>()
+  private readonly turnSteps = new Map<number, StreamingAssistantComponent[]>()
   private readonly stream = new LiveStreamController()
   private readonly timing = new StepTimingTracker()
   private readonly mdTheme
   private cursor = -1
   private activePosition: { turn: number; step: number } | undefined
+  private detailsState: TranscriptView
 
   constructor(
     readonly childId: SessionId,
     label: string | undefined,
     private readonly palette: Palette,
     private readonly resolved: ResolvedTuiConfig,
+    details: TranscriptView,
   ) {
     super()
+    this.detailsState = { ...details }
     this.mdTheme = markdownTheme(palette)
     this.addChild(new Text(palette.bold(palette.accent(`Viewing child ${displayText(label ?? childId)}`)), 0, 0))
-    this.addChild(new Text(palette.dim('Read only · submissions and controls remain on main'), 0, 0))
+    this.addChild(new Text(palette.dim('Read only · Ctrl+O/R and Alt+C adjust this view · Esc agents'), 0, 0))
   }
 
   get lastSequence(): number { return this.cursor }
+
+  setDetails(details: TranscriptView): void {
+    this.detailsState = { ...details }
+    for (const card of this.allTools) card.setVisibility(details.tools)
+    for (const card of this.contexts) card.setVisibility(details.context)
+    for (const steps of this.turnSteps.values()) {
+      for (const step of steps) step.setReasoningFold(details.reasoning)
+    }
+    for (const turn of this.turnSteps.keys()) this.applyTurnFolding(turn)
+    this.invalidate()
+  }
+
+  private applyTurnFolding(turn: number): void {
+    const steps = this.turnSteps.get(turn)
+    if (steps === undefined) return
+    let headerSeen = false
+    for (const step of steps) {
+      if (this.detailsState.tools !== 'hidden') step.setFoldedContinuation(false)
+      else if (!headerSeen && step.hasVisibleBody()) {
+        headerSeen = true
+        step.setFoldedContinuation(false)
+      } else step.setFoldedContinuation(true)
+    }
+  }
 
   /** Append exactly the next durable event; duplicates are harmless, gaps request a fresh observation. */
   addEvent(event: SessionEvent): 'added' | 'duplicate' | 'gap' {
@@ -77,7 +108,10 @@ export class ChildTranscript extends Container {
         } else {
           const source = event.data.source as { kind?: string; plugin?: string }
           const label = source.plugin ?? source.kind ?? 'context'
-          this.addChild(new ContextCardComponent(label, text, this.resolved.maxToolOutputLines, this.palette))
+          const card = new ContextCardComponent(label, text, this.resolved.maxToolOutputLines, this.palette)
+          card.setVisibility(this.detailsState.context)
+          this.contexts.add(card)
+          this.addChild(card)
         }
         break
       }
@@ -87,6 +121,7 @@ export class ChildTranscript extends Container {
       case 'assistant/message': {
         const step = this.ensureStep(event.data.turn, event.data.step)
         step.settle(event.data.message.content)
+        this.applyTurnFolding(event.data.turn)
         break
       }
       case 'tool/call': {
@@ -95,8 +130,9 @@ export class ChildTranscript extends Container {
           this.resolved.maxToolOutputLines, this.resolved.maxDiffEditLength,
           this.palette, this.mdTheme,
         )
-        card.setVisibility(this.resolved.toolCardVisibility)
+        card.setVisibility(this.detailsState.tools)
         this.tools.set(event.data.callId, card)
+        this.allTools.add(card)
         this.addChild(card)
         break
       }
@@ -133,7 +169,10 @@ export class ChildTranscript extends Container {
       this.activePosition = action.position
       this.ensureStep(action.position.turn, action.position.step)
     }
-    if (action.kind === 'chunk') this.ensureStep(action.position.turn, action.position.step).update(action.chunk)
+    if (action.kind === 'chunk') {
+      this.ensureStep(action.position.turn, action.position.step).update(action.chunk)
+      this.applyTurnFolding(action.position.turn)
+    }
     if (action.kind === 'end' && action.retract && this.activePosition !== undefined) {
       const key = `${this.activePosition.turn}:${this.activePosition.step}`
       const step = this.steps.get(key)
@@ -141,6 +180,12 @@ export class ChildTranscript extends Container {
         this.removeChild(step)
         this.removeChild(step.timing)
         this.steps.delete(key)
+        const steps = this.turnSteps.get(this.activePosition.turn)
+        if (steps !== undefined) {
+          const index = steps.indexOf(step)
+          if (index >= 0) steps.splice(index, 1)
+          this.applyTurnFolding(this.activePosition.turn)
+        }
       }
     }
     if (action.kind === 'end') this.activePosition = undefined
@@ -152,9 +197,13 @@ export class ChildTranscript extends Container {
     if (existing !== undefined && !existing.isSettled()) return existing
     const component = new StreamingAssistantComponent(
       { turn, step }, () => this.events, this.timing, () => Date.now(),
-      this.resolved.reasoningFold, this.palette, this.mdTheme,
+      this.detailsState.reasoning, this.palette, this.mdTheme,
     )
     this.steps.set(key, component)
+    const stepsForTurn = this.turnSteps.get(turn) ?? []
+    stepsForTurn.push(component)
+    this.turnSteps.set(turn, stepsForTurn)
+    this.applyTurnFolding(turn)
     this.addChild(component)
     this.addChild(component.timing)
     return component
@@ -164,6 +213,8 @@ export class ChildTranscript extends Container {
 export interface SubagentSwitcher {
   readonly rows: readonly SubagentRow[]
   readonly selectedId: SessionId | undefined
+  readonly details: TranscriptView
+  setDetails(details: TranscriptView): void
   refresh(): Promise<void>
   select(id: SessionId): boolean
   back(): void
@@ -187,6 +238,12 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
   let entries: readonly SubagentListEntry[] = []
   let rows: SubagentRow[] = []
   let selectedId: SessionId | undefined
+  let childDetails: TranscriptView = {
+    tools: deps.resolved.toolCardVisibility,
+    reasoning: deps.resolved.reasoningFold,
+    context: deps.resolved.contextVisibility,
+  }
+  let selectedTranscript: ChildTranscript | undefined
   const originTypes = new Map<SessionId, SubagentOriginType | 'invalid'>()
   const pendingTypes = new Map<SessionId, AbortController>()
   let generation = 0
@@ -197,6 +254,7 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
   let disposed = false
 
   const detachView = (): void => {
+    selectedTranscript = undefined
     viewAbort?.abort()
     viewAbort = undefined
     detachEvent?.()
@@ -269,13 +327,14 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
           back()
           return
         }
-        const view = new ChildTranscript(id, row.label, deps.palette, deps.resolved)
+        const view = new ChildTranscript(id, row.label, deps.palette, deps.resolved, childDetails)
         view.replay(observation.events)
         for (const event of buffered.sort((a, b) => a.seq - b.seq)) {
           if (view.addEvent(event) === 'gap') { select(id); return }
         }
         buffered.length = 0
         transcript = view
+        selectedTranscript = view
         deps.onView(view)
       } finally {
         observation[Symbol.dispose]()
@@ -337,6 +396,12 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
   return {
     get rows() { return rows },
     get selectedId() { return selectedId },
+    get details() { return { ...childDetails } },
+    setDetails: details => {
+      childDetails = { ...details }
+      selectedTranscript?.setDetails(childDetails)
+      if (selectedTranscript !== undefined) deps.onRender()
+    },
     refresh,
     select,
     back,

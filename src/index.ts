@@ -103,9 +103,10 @@ import {
   formatResumeHint,
   resolveTuiConfig,
   type Config,
+  type ContextVisibility,
   type ReasoningFold,
 } from './config.ts'
-import { applyDetailsArguments, createQuietCommand, nextReasoningFold } from './chat/details.ts'
+import { applyDetailsArguments, createQuietCommand, nextContextVisibility, nextReasoningFold, nextToolCardVisibility, type TranscriptView } from './chat/details.ts'
 import { TuiKeymap } from './chat/keymap.ts'
 import { createPermissionModeController, type PermissionModeController } from './chat/permission-mode.ts'
 import { HistoryStore } from './chat/history-store.ts'
@@ -363,6 +364,7 @@ export function createTuiChat(
   // Ctrl+O cycles collapsed -> expanded -> hidden from the configured startup
   // state. Hidden drops cards; collapsed previews; expanded shows full bodies.
   let toolsVisibility: ToolCardVisibility = resolved.toolCardVisibility
+  let contextVisibility: ContextVisibility = resolved.contextVisibility
   let streaming: StreamingAssistantComponent | undefined
   let completedStreaming: StreamingAssistantComponent | undefined
   // Live per-step phase for the status glyph, fed by `agent/assistant-stream`
@@ -614,6 +616,14 @@ export function createTuiChat(
   // in-place children mutations keep their index meaning.
   const childViewKeys = new ChildViewKeys(keymap, () => {
     agentsBrowser.backFromChild()
+  }, action => {
+    const current = subagentSwitcher.details
+    const next: TranscriptView = action === 'tools'
+      ? { ...current, tools: nextToolCardVisibility(current.tools) }
+      : action === 'reasoning'
+        ? { ...current, reasoning: nextReasoningFold(current.reasoning) }
+        : { ...current, context: nextContextVisibility(current.context) }
+    subagentSwitcher.setDetails(next)
   })
   const { root: layoutRoot, transcriptScroll } = buildTuiLayout({
     header, chat: viewSlot, todoContainer, compactionStatusLine, childViewKeys,
@@ -758,6 +768,7 @@ export function createTuiChat(
 
   agentsBrowser = new AgentsBrowser({
     switcher: subagentSwitcher, overlays: overlayManager, keymap, palette,
+    mainDetails: () => ({ tools: toolsVisibility, reasoning: reasoningFold, context: contextVisibility }),
     viewport: () => ({ columns: runtime.terminal.columns, rows: runtime.terminal.rows }),
     focusChild: () => { ui.setFocus(childViewKeys) },
     isDisposed: () => disposed,
@@ -1078,10 +1089,10 @@ export function createTuiChat(
         if (source.kind !== 'user') {
           const references = sessionReferenceCard(event.data.source)
           if (references !== undefined) {
-            insertAboveCurrentStep(
-              new Spacer(1),
-              new Text(palette.dim(`Referenced sessions · ${references.map(displayText).join(', ')}`), 0, 0),
-            )
+            const card = new ContextCardComponent('Referenced sessions', references.join(', '), resolved.maxToolOutputLines, palette)
+            card.setVisibility(contextVisibility)
+            contextCards.add(card)
+            insertAboveCurrentStep(card)
             break
           }
           const text = contentText(event.data.content).trim()
@@ -1096,9 +1107,9 @@ export function createTuiChat(
               : typeof labelled.kind === 'string' ? labelled.kind
                 : 'context'
             const card = new ContextCardComponent(label, text, resolved.maxToolOutputLines, palette)
-            card.setExpanded(toolsVisibility === 'expanded')
+            card.setVisibility(contextVisibility)
             contextCards.add(card)
-            insertAboveCurrentStep(new Spacer(1), card)
+            insertAboveCurrentStep(card)
           }
           break
         }
@@ -1379,20 +1390,20 @@ export function createTuiChat(
   const setToolsVisibility = (next: ToolCardVisibility): void => {
     toolsVisibility = next
     for (const card of allToolCards) card.setVisibility(toolsVisibility)
-    // Context cards carry injected instructions rather than tool traffic, so
-    // they never hide: the hidden phase reads as their collapsed preview.
-    for (const card of contextCards) card.setExpanded(toolsVisibility === 'expanded')
     // Hidden mode folds each turn's steps into one assistant message; other
     // modes restore the per-step Assistant headers.
     for (const turn of assistantSteps.keys()) applyTurnFolding(turn)
-    appendNotice(toolsVisibility === 'hidden' ? 'Tool cards hidden.' : `Tool and context cards ${toolsVisibility}.`)
+    appendNotice(`Tool cards ${toolsVisibility}.`)
   }
 
   const toggleTools = (): void => {
-    // The cycle order puts the two common reading modes adjacent: preview ->
-    // full detail -> conversation-only, then back to the preview default.
-    setToolsVisibility(toolsVisibility === 'collapsed' ? 'expanded'
-      : toolsVisibility === 'expanded' ? 'hidden' : 'collapsed')
+    setToolsVisibility(nextToolCardVisibility(toolsVisibility))
+  }
+
+  const setContextVisibility = (next: ContextVisibility): void => {
+    contextVisibility = next
+    for (const card of contextCards) card.setVisibility(next)
+    appendNotice(`Context display ${next}.`)
   }
 
   const setReasoningFold = (fold: ReasoningFold): void => {
@@ -1411,10 +1422,11 @@ export function createTuiChat(
   }
 
   const runQuiet = createQuietCommand(
-    { tools: resolved.toolCardVisibility, reasoning: resolved.reasoningFold },
-    () => ({ tools: toolsVisibility, reasoning: reasoningFold }),
+    { tools: resolved.toolCardVisibility, reasoning: resolved.reasoningFold, context: resolved.contextVisibility },
+    () => ({ tools: toolsVisibility, reasoning: reasoningFold, context: contextVisibility }),
     setToolsVisibility,
     setReasoningFold,
+    setContextVisibility,
   )
 
   // The selector and the argument grammar mutate the same closure state the
@@ -1426,11 +1438,13 @@ export function createTuiChat(
       create: () => new DetailsDialog(
         toolsVisibility,
         reasoningFold,
+        contextVisibility,
         palette,
         // Each Tab applies immediately; one dimension changes per call.
         (selection: DetailsSelection) => {
           if (selection.reasoning !== reasoningFold) setReasoningFold(selection.reasoning)
           if (selection.tools !== toolsVisibility) setToolsVisibility(selection.tools)
+          if (selection.context !== contextVisibility) setContextVisibility(selection.context)
         },
         () => { void session.close() },
       ),
@@ -1468,7 +1482,7 @@ export function createTuiChat(
       showDetailsSelector()
       return { kind: 'success' }
     }
-    return applyDetailsArguments(rawInput, setToolsVisibility, setReasoningFold)
+    return applyDetailsArguments(rawInput, setToolsVisibility, setReasoningFold, setContextVisibility)
   }
 
   const showHelp = (): void => {
@@ -1480,7 +1494,7 @@ export function createTuiChat(
     chat.addChild(new Text(palette.bold(palette.accent('Keyboard shortcuts')), 0, 0))
     chat.addChild(new Text([
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
-      'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
+      'Esc cancel turn • Ctrl+O cycle cards • Ctrl+R cycle reasoning • Alt+C cycle context • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
       'Shift+Tab cycle permission (model picker: cycle effort)',
       'Ctrl+G or /agents browse child agents · ↑/↓ select · Enter view · Esc back',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
@@ -1661,8 +1675,8 @@ export function createTuiChat(
     })
     commandCtx.commands.register({
       name: 'details',
-      description: 'Select tool-card visibility and reasoning display',
-      input: { hint: '[collapsed|expanded|hidden] [reasoning off|preview|full]' },
+      description: 'Select tool-card, reasoning, and context display',
+      input: { hint: '[collapsed|expanded|hidden] [reasoning off|preview|full] [context hidden|collapsed|expanded]' },
       handler: ({ rawInput }) => runDetails(rawInput),
     })
     commandCtx.commands.register({
@@ -1946,6 +1960,7 @@ export function createTuiChat(
       case 'cards': showCards(); break
       case 'tools': toggleTools(); break
       case 'reasoning': setReasoningFold(nextReasoningFold(reasoningFold)); break
+      case 'context': setContextVisibility(nextContextVisibility(contextVisibility)); break
       case 'redraw': ui.invalidate(); ui.requestRender(true); break
       case 'cancel':
         if (agent.status !== 'running') return undefined
