@@ -15,6 +15,7 @@ import {
 } from '@deepseek-ai/dsh-user-questions'
 import type { TuiOverlaySession } from '../extension/types.ts'
 import { QuestionDialog } from '../components/dialogs.ts'
+import { isPlanReviewQuestion, PlanReviewPanel } from '../components/plan-panel.ts'
 import type { ChatChannelDeps } from './channel.ts'
 import { QuestionNotifier } from './notify.ts'
 
@@ -88,7 +89,8 @@ export function createQuestionQueue(deps: QuestionQueueDeps): QuestionQueue {
       const session = overlayManager.open({
         ...pending.request.signal === undefined ? {} : { signal: pending.request.signal },
         create: () => {
-          const dialog = new QuestionDialog(
+          const Dialog = isPlanReviewQuestion(question) ? PlanReviewPanel : QuestionDialog
+          const dialog = new Dialog(
           question,
           pending.index + 1,
           pending.request.questions.length,
