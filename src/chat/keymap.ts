@@ -3,8 +3,8 @@ import { matchesKey, type KeyId } from '@earendil-works/pi-tui'
 
 export const DEFAULT_KEYS = Object.freeze({
   cards: 'ctrl+t',
-  tools: 'ctrl+o',
-  reasoning: 'ctrl+r',
+  tools: 'alt+t',
+  reasoning: 'alt+r',
   context: 'alt+c',
   redraw: 'ctrl+l',
   cancel: 'escape',

@@ -5,14 +5,16 @@ import { createPermissionModeController } from '../src/chat/permission-mode.ts'
 import { createPalette } from '../src/components/theme.ts'
 
 describe('composer keymap', () => {
-  it('keeps the existing actions and adds Shift+Tab without stealing modal input', () => {
+  it('routes Alt display shortcuts in composer and child views without stealing modal input', () => {
     const keys = new TuiKeymap()
     expect(keys.resolve('\x14')).toBe('cards')
-    expect(keys.resolve('\x0f')).toBe('tools')
-    expect(keys.resolve('\x12')).toBe('reasoning')
+    expect(keys.resolve('\x1bt')).toBe('tools')
+    expect(keys.resolve('\x1br')).toBe('reasoning')
     expect(keys.resolve('\x1bc')).toBe('context')
-    expect(keys.resolve('\x0f', 'subagentBrowser')).toBe('tools')
-    expect(keys.resolve('\x12', 'subagentBrowser')).toBe('reasoning')
+    expect(keys.resolve('\x1bt', 'subagentBrowser')).toBe('tools')
+    expect(keys.resolve('\x1br', 'subagentBrowser')).toBe('reasoning')
+    expect(keys.resolve('\x0f')).toBeUndefined()
+    expect(keys.resolve('\x12')).toBeUndefined()
     expect(keys.resolve('\x1bc', 'subagentBrowser')).toBe('context')
     expect(keys.resolve('\x0c')).toBe('redraw')
     expect(keys.resolve('\x1b')).toBe('cancel')

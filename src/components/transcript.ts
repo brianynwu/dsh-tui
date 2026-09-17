@@ -205,7 +205,7 @@ class ReasoningPreviewComponent implements Component {
 
   render(width: number): string[] {
     return preview(this.markdown.render(width), REASONING_PREVIEW_LINES, count => {
-      const cue = truncateToWidth(`… +${count} lines (Ctrl+R to expand)`, Math.max(1, width), '…')
+      const cue = truncateToWidth(`… +${count} lines (Alt+R to expand)`, Math.max(1, width), '…')
       return new Text(this.palette.dim(cue), 0, 0).render(width)[0] ?? ''
     })
   }
@@ -441,7 +441,7 @@ interface CardBody {
 }
 
 /**
- * Ctrl+O card-visibility cycle: `hidden` drops tool cards from the transcript,
+ * Alt+T card-visibility cycle: `hidden` drops tool cards from the transcript,
  * `collapsed` previews the first body lines, `expanded` shows everything.
  */
 export type ToolCardVisibility = 'hidden' | 'collapsed' | 'expanded'
@@ -594,7 +594,7 @@ export class ToolCardComponent extends CachedCardComponent {
         text => this.palette.dim(text),
         text => this.palette.dim(text),
         /* v8 ignore next -- renderUnknownXml calls the collapsed summary only when hidden XML children exceed this card's limit. */
-        count => this.palette.dim(`  … +${count} lines (Ctrl+O to expand)`),
+        count => this.palette.dim(`  … +${count} lines (Alt+T to expand)`),
       )
       : undefined
     // A generic card renders title and result as one Markdown document, so the
@@ -605,7 +605,7 @@ export class ToolCardComponent extends CachedCardComponent {
       : [...rawBody.prelude, ...rawBody.lines])
     const visibleBody = unknownXml !== undefined || visibility === 'expanded'
       ? body
-      : preview(body, this.maxOutputLines, count => this.palette.dim(`… +${count} lines (Ctrl+O to expand)`))
+      : preview(body, this.maxOutputLines, count => this.palette.dim(`… +${count} lines (Alt+T to expand)`))
     // The header is a fixed `Tool / <name>` frame in the status color (warning
     // pending / success ok / error), flat — no bold or underline, so one color
     // reads consistently across the whole row. Every tool-specific detail (a

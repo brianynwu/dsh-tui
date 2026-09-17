@@ -1,5 +1,7 @@
 # Plan (refined, round 1) — dsh-tui fork: configurable verbosity + `/quiet` + reasoning fold + detail overlay
 
+Keyboard labels below use the current fork shortcuts, Alt+T for tool cards and Alt+R for reasoning. The implementation sequence remains the original plan.
+
 Base: the Fable plan, refined by the operator's dual-planner selections and the GPT plan's contract points.
 Author: orchestrator consolidation (Claude) → auditor is Codex (vendor complement). Improvements #1–4 in the
 FORK repo `/home/bwu/work/dsh-tui` off `main` @ `34dd9ec`; Foundry re-pin is a named follow-on.
@@ -37,7 +39,7 @@ deployments keep hiding reasoning.
 - `assistantMessageChildren(content, reasoningFold, …)` (currently a `showReasoning` boolean at :197):
   `full` = today's dim italic "Reasoning" header + full `Markdown` (:210-216); `preview` = the same header +
   the reasoning body run through the existing `preview(lines, REASONING_PREVIEW_LINES, omitted)`
-  (xml-tool-output.ts:115) with a `… +N lines (Ctrl+R to expand)` omission cue; `off` = neither header nor
+  (xml-tool-output.ts:115) with a `… +N lines (Alt+R to expand)` omission cue; `off` = neither header nor
   body. `REASONING_PREVIEW_LINES = 3` module constant, no new knob.
 - Apply to BOTH the settled path and the streaming path (`StreamingAssistantComponent`, transcript.ts:296/359):
   replace `showReasoning:boolean` + `setShowReasoning` with `reasoningFold` + `setReasoningFold(fold)`.
@@ -47,9 +49,8 @@ deployments keep hiding reasoning.
   use the width-aware path.
 
 **Runtime controls (`src/index.ts` + `src/components/dialogs.ts`):**
-- Ctrl+O unchanged (tool cycle collapsed→expanded→hidden + turn folding).
-- **Ctrl+R cycles reasoning `full → off → preview → full`** (first press from stock `full` → `off`, preserving
-  today's "one press hides reasoning" muscle memory), via `setReasoningFold`.
+- Alt+T controls the tool cycle collapsed→expanded→hidden + turn folding (the binding changed after this plan).
+- **Alt+R cycles reasoning `full → off → preview → full`** (first press from stock `full` → `off`), via `setReasoningFold`.
 - `DetailsSelection` becomes `{ tools: ToolCardVisibility, reasoning: ReasoningFold }`; the DetailsDialog
   Reasoning entry cycles the 3 fold states (dialogs.ts:444, replacing the binary `reasoningLabel`).
 - `/details` grammar extends to `[collapsed|expanded|hidden] [reasoning off|preview|full]`; keep
@@ -84,7 +85,7 @@ deployments keep hiding reasoning.
 
 **Sequencing (Q5): one branch, four stacked commits, each with its own spec + Codex diff-review.**
 `C1` config-seed (#1) → `C2` reasoning 3-state (#3: canonical resolve + alias, settled+streaming render,
-Ctrl+R, DetailsDialog, `/details`) → `C3` `/quiet` (#2, depends on C2's setter) → `C4` overlay (#4, largest,
+Alt+R, DetailsDialog, `/details`) → `C3` `/quiet` (#2, depends on C2's setter) → `C4` overlay (#4, largest,
 reviewed last). C4 is the operator go/no-go point IF Unknown-1 shows card bodies are not retained when
 hidden/folded (then C4 needs a small retained-card list at the card-creation insertion point).
 
@@ -96,7 +97,7 @@ hidden/folded (then C4 needs a small retained-card list at the card-creation ins
   intentional always-rendered delta is the C4 help-line `/cards` token (S1). `showReasoning:false` still
   hides; `reasoningFold` wins over it.
 - `/quiet` → cards hidden + turns folded + reasoning off; `/quiet off` → restores prior (or stock).
-- Ctrl+R cycles full→off→preview→full; DetailsDialog + `/details` drive all 3 reasoning states.
+- Alt+R cycles full→off→preview→full; DetailsDialog + `/details` drive all 3 reasoning states.
 - `/cards` AND the keybind open the full-body browser while `toolsVisibility` stays `hidden`; close leaves the
   transcript untouched.
 - Attended live-verify checklist run in a real terminal. Foundry re-pin NAMED, not done.
@@ -105,11 +106,11 @@ hidden/folded (then C4 needs a small retained-card list at the card-creation ins
 | Check | Establishes | Does not establish |
 |---|---|---|
 | `test/config.*` through the real schema parser: stock / `showReasoning:false` / explicit `reasoningFold` / `toolCardVisibility:'hidden'` | Field plumbing, alias precedence, default transparency, enum validation, invalid-value rejection | Rendering/TTY |
-| Reasoning spec: `assistantMessageChildren` at off/preview/full + streaming `setReasoningFold`; width-bounded preview at narrow width; **the actual Ctrl+R handler cycles full→off→preview→full; the DetailsDialog Reasoning entry cycles all 3 and emits the right `DetailsSelection`** (plan-review B2) | 3-state render, byte-equal `full` vs pre-change fixture, 3-row preview budget, both controls drive all 3 states | TTY input routing |
+| Reasoning spec: `assistantMessageChildren` at off/preview/full + streaming `setReasoningFold`; width-bounded preview at narrow width; **the actual Alt+R handler cycles full→off→preview→full; the DetailsDialog Reasoning entry cycles all 3 and emits the right `DetailsSelection`** (plan-review B2) | 3-state render, byte-equal `full` vs pre-change fixture, 3-row preview budget, both controls drive all 3 states | TTY input routing |
 | Quiet spec: apply → state pair + folding invoked; `on`→`off` restores prior; `on`→`on`→`off` restores the ORIGINAL prior (2nd `on` no-op); `off` when not quiet restores config/stock; `preQuiet` cleared after restore | Snapshot-lifecycle invariant + command semantics through the real setters | Key handling |
 | Overlay spec: N cards at `toolsVisibility:'hidden'` incl. a body > `maxToolOutputLines` + a diff fixture → full bodies present; nav/empty-state; global visibility + card phases unchanged after open/close | Read-only, completeness, non-mutation | Real overlay input routing |
 | Two clean `npm ci && npm run build` | Foundry pin viability (byte-identical `lib/`) | Behavior |
-| Attended live-verify | Boot-quiet, `/quiet`+off, Ctrl+R 3 states, DetailsDialog, `/cards`+keybind open/scroll/nav/close, focus restore | Beyond one operator session |
+| Attended live-verify | Boot-quiet, `/quiet`+off, Alt+R 3 states, DetailsDialog, `/cards`+keybind open/scroll/nav/close, focus restore | Beyond one operator session |
 | Foundry doctor 8/8 + full `uv run pytest` (follow-on) | Consumer install + pin consistency | After the fork cycle |
 
 ## Anti (foreclosed)
@@ -140,7 +141,7 @@ patch replaces the whole config block). §2.6: C4 is largest — stage last; ope
 - Remembered `/quiet off` (operator) over a fixed inverse: a small `preQuiet` snapshot buys "restore what I had".
 - Both `/cards` + keybind (operator): discoverable AND fast; cost is one extra registration + a chord probe.
 - Back-compat: `showReasoning` kept as a one-line alias, not removed.
-- Ctrl+R gains a 3rd state (`full→off→preview→full`); first press still hides (muscle memory preserved).
+- Alt+R cycles through 3 states (`full→off→preview→full`); first press hides reasoning.
 - Overlay minimalism: flat all-cards browser, snapshot+refresh; blast radius = one file + `/cards` + a keybind + a help token; reads card data, never writes transcript state (one-way dependency).
 
 ## Unknown (probe FIRST, in order — record findings in the context)
@@ -160,7 +161,7 @@ patch replaces the whole config block). §2.6: C4 is largest — stage last; ope
 ## Steps
 1. Branch off `main` @ `34dd9ec`; run Unknown probes 1–7; record findings.
 2. **C1** — `toolCardVisibility` field + seed index.ts:347; config spec; capture stock reasoning fixture. Build+vitest+typecheck. Diff-review.
-3. **C2** — `reasoningFold` field + `showReasoning` alias (canonical resolve); 3-state settled+streaming render via `preview()`; Ctrl+R cycle; DetailsDialog 3-state; `/details` grammar + on/off aliases. Reasoning spec asserts fixture equality at `full`; grep `showReasoning` → only config.ts. Diff-review.
+3. **C2** — `reasoningFold` field + `showReasoning` alias (canonical resolve); 3-state settled+streaming render via `preview()`; Alt+R cycle; DetailsDialog 3-state; `/details` grammar + on/off aliases. Reasoning spec asserts fixture equality at `full`; grep `showReasoning` → only config.ts. Diff-review.
 4. **C3** — `/quiet [on|off]` via existing setters with `preQuiet` memory; quiet spec. Diff-review.
 5. **C4** — cards-overlay component + `/cards` + verified keybind; overlay spec; help line. Diff-review. Operator go/no-go only if probe 1 forced a retained list.
 6. Two clean reproducible builds; attended live-verify checklist. Merge to fork `main`; record the SHA.

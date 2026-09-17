@@ -59,7 +59,7 @@ export class ChildTranscript extends Container {
     this.detailsState = { ...details }
     this.mdTheme = markdownTheme(palette)
     this.addChild(new Text(palette.bold(palette.accent(`Viewing child ${displayText(label ?? childId)}`)), 0, 0))
-    this.addChild(new Text(palette.dim('Read only · Ctrl+O/R and Alt+C adjust this view · Esc agents'), 0, 0))
+    this.addChild(new Text(palette.dim('Read only · Alt+T/R/C adjust this view · Esc agents'), 0, 0))
   }
 
   get lastSequence(): number { return this.cursor }

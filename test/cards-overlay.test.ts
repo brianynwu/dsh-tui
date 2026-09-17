@@ -102,7 +102,7 @@ describe('read-only tool-card browser', () => {
     pane.render(80)
     pane.handleInput('q')
     expect([collapsed.render(76), expanded.render(76)]).toEqual(before)
-    expect(before[0].join('\n')).toContain('Ctrl+O to expand')
+    expect(before[0].join('\n')).toContain('Alt+T to expand')
     expect(before[1].join('\n')).toContain('three')
   })
 

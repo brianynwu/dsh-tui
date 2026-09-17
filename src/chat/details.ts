@@ -19,13 +19,13 @@ export function nextToolCardVisibility(current: ToolCardVisibility): ToolCardVis
   return current === 'collapsed' ? 'expanded' : current === 'expanded' ? 'hidden' : 'collapsed'
 }
 
-/** Handle the actual Ctrl+R chord; return whether it consumed this input. */
+/** Handle the actual Alt+R chord; return whether it consumed this input. */
 export function handleReasoningShortcut(
   data: string,
   current: ReasoningFold,
   setReasoningFold: (fold: ReasoningFold) => void,
 ): boolean {
-  if (!matchesKey(data, Key.ctrl('r'))) return false
+  if (!matchesKey(data, Key.alt('r'))) return false
   setReasoningFold(nextReasoningFold(current))
   return true
 }

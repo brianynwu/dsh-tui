@@ -31,7 +31,7 @@ export interface TuiConfig {
     showReasoning?: boolean;
     /** Reasoning display at startup. Unset preserves the legacy `showReasoning` setting. */
     reasoningFold?: ReasoningFold;
-    /** Tool-card startup visibility; Ctrl+O can still change it for this session. */
+    /** Tool-card startup visibility; Alt+T can still change it for this session. */
     toolCardVisibility?: 'hidden' | 'collapsed' | 'expanded';
     /** Injected-context card visibility; Alt+C can still change it for this session. */
     contextVisibility?: ContextVisibility;

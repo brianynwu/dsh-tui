@@ -2,8 +2,8 @@
 import { type KeyId } from '@earendil-works/pi-tui';
 export declare const DEFAULT_KEYS: Readonly<{
     readonly cards: "ctrl+t";
-    readonly tools: "ctrl+o";
-    readonly reasoning: "ctrl+r";
+    readonly tools: "alt+t";
+    readonly reasoning: "alt+r";
     readonly context: "alt+c";
     readonly redraw: "ctrl+l";
     readonly cancel: "escape";

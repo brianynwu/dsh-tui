@@ -67,12 +67,13 @@ describe('reasoning fold render', () => {
 })
 
 describe('reasoning controls', () => {
-  it('the Ctrl+R handler cycles full → off → preview → full and ignores other input', () => {
+  it('the Alt+R handler cycles full → off → preview → full and ignores other input', () => {
     let fold: ReasoningFold = 'full'
     const set = (next: ReasoningFold): void => { fold = next }
     expect(handleReasoningShortcut('x', fold, set)).toBe(false)
+    expect(handleReasoningShortcut('\x12', fold, set)).toBe(false)
     for (const expected of ['off', 'preview', 'full'] as const) {
-      expect(handleReasoningShortcut('\x12', fold, set)).toBe(true)
+      expect(handleReasoningShortcut('\x1br', fold, set)).toBe(true)
       expect(fold).toBe(expected)
     }
   })

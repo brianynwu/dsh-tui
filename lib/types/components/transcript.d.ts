@@ -127,7 +127,7 @@ export declare class StreamingAssistantComponent extends Container {
     private rebuild;
 }
 /**
- * Ctrl+O card-visibility cycle: `hidden` drops tool cards from the transcript,
+ * Alt+T card-visibility cycle: `hidden` drops tool cards from the transcript,
  * `collapsed` previews the first body lines, `expanded` shows everything.
  */
 export type ToolCardVisibility = 'hidden' | 'collapsed' | 'expanded';

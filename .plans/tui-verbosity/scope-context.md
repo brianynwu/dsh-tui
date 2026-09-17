@@ -1,5 +1,7 @@
 # Scope context — dsh-tui fork: user-configurable output-verbosity / quiet-mode (improvements #1–4)
 
+Keyboard labels below use the current fork shortcuts, Alt+T for tool cards and Alt+R for reasoning. Source locations and behavior remain the original research snapshot.
+
 ## Why
 The fork `@brianynwu/dsh-tui` (repo `/home/bwu/work/dsh-tui`, current pin `34dd9ec`) is the most capable of
 three scout TUI candidates at hiding model output, but has gaps a comparison exposed. Add four accepted
@@ -55,8 +57,8 @@ the atomic tool card is the right unit — do NOT design it):
   → a true conversation-only view. Context cards never fully hide (index.ts:1293).
 
 ### Existing runtime controls (the composition surface #1–3 must integrate with)
-- **Ctrl+O** → `toggleTools()` cycles collapsed→expanded→hidden (index.ts:1301, key at 1831).
-- **Ctrl+R** → `toggleReasoning()` toggles showReasoning (index.ts:1323, key at 1835).
+- **Alt+T** → `toggleTools()` cycles collapsed→expanded→hidden (index.ts:1301, key at 1831).
+- **Alt+R** → `toggleReasoning()` toggles showReasoning (index.ts:1323, key at 1835).
 - **`/details [collapsed|expanded|hidden] [reasoning on|off]`** slash command (`runDetails` index.ts:1353,
   registered index.ts:1568). No-arg opens `DetailsDialog`.
 - **`DetailsDialog`** (`src/components/dialogs.ts:444`): a 2-entry `SelectList` (Tool cards | Reasoning); Tab
@@ -64,19 +66,19 @@ the atomic tool card is the right unit — do NOT design it):
   (`TOOL_CARD_PHASES = ['collapsed','expanded','hidden']`, dialogs.ts:436); Reasoning is BINARY
   (`reasoningLabel()` shown/hidden). `DetailsSelection = { visibility, showReasoning }` (dialogs.ts:431).
   Opened via `overlayManager.open(...)` (index.ts:1330).
-- Help line documents `Ctrl+O cycle cards • Ctrl+R toggle reasoning • Ctrl+L redraw` (index.ts:1391).
+- Help line documents `Alt+T cycle cards • Alt+R toggle reasoning • Ctrl+L redraw` (index.ts:1391).
 
 ### Overlay infrastructure (for #4)
 - `src/extension/overlay-manager.ts`: `OverlayManager.open(request, placement)` →
   `TuiOverlaySession` (line 179); `openOverlay(request)` (line 362). DetailsDialog is already an overlay
-  Component. A new detail-browser overlay would be a Component opened through this manager. Note **Ctrl+O is
+  Component. A new detail-browser overlay would be a Component opened through this manager. Note **Alt+T is
   already bound** (tool cycle) — a new overlay needs its own key/command (tomowang uses Ctrl+O for its
   overlay, but here that is taken).
 
 ### Tests
 - Fork uses **vitest**; specs in `test/` (dashboard/editor/layout/latex/stream/timing/tokens-usage/
   model-context/prompt-metrics/resume-*). New specs needed for: config default seeding, `/quiet` +
-  inverse, reasoningFold 3-state (config + Ctrl+R + DetailsDialog), the detail overlay. `test/config.*`
+  inverse, reasoningFold 3-state (config + Alt+R + DetailsDialog), the detail overlay. `test/config.*`
   or a new spec; follow the existing style (independent construction, assert render output).
 - Build must stay reproducible (`npm ci && npm run build` → byte-identical `lib/`); the Foundry doctor pins
   `sha256(lib/index.js)`.
@@ -96,15 +98,15 @@ the atomic tool card is the right unit — do NOT design it):
    What is the smallest coherent surface that isn't redundant?
 2. **`reasoningFold` vs the existing `showReasoning`.** `reasoningFold: off|preview|full` supersedes the
    binary `showReasoning` (default true = `full`). How to migrate: deprecate/alias `showReasoning`, keep both,
-   or map `showReasoning:false → off`, `true → full` and make `preview` the new opt-in? Ctrl+R currently
+   or map `showReasoning:false → off`, `true → full` and make `preview` the new opt-in? Alt+R currently
    toggles binary — does it now cycle 3 states, or toggle full↔off with preview only via config/`/details`?
    The `DetailsSelection`/`DetailsDialog` reasoning entry must change from binary to 3-phase to match.
 3. **Quiet-preset semantics.** Exactly what does `/quiet` set (reasoning `off` + tools `hidden`?), what is
    its inverse (restore the config defaults, or a fixed `full`+`collapsed`?), and is it also a keybind (which
-   free key — Ctrl+O/R/L/E are taken)? Does it persist for the session only, or is `startupView` the persist
+   free key — Alt+T/R and Ctrl+L/E are taken)? Does it persist for the session only, or is `startupView` the persist
    path?
 4. **Detail-overlay scope + entry.** Does the overlay browse ALL tool cards (a scrollable list like
-   tomowang's) or the currently-selected/last card? What key/command opens it (Ctrl+O is taken)? Read-only
+   tomowang's) or the currently-selected/last card? What key/command opens it (Alt+T is taken)? Read-only
    navigation only (no transcript mutation). Reuse `OverlayManager` + a new Component.
 5. **Sequencing.** #1 is tiny and independent; #4 is the largest (new component). Can these ship as separate
    commits/PRs within one branch, or is a combined coherent config model a prerequisite that forces order

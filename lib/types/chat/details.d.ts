@@ -5,7 +5,7 @@ import type { ToolCardVisibility } from '../components/transcript.ts';
 export declare function nextReasoningFold(current: ReasoningFold): ReasoningFold;
 export declare function nextContextVisibility(current: ContextVisibility): ContextVisibility;
 export declare function nextToolCardVisibility(current: ToolCardVisibility): ToolCardVisibility;
-/** Handle the actual Ctrl+R chord; return whether it consumed this input. */
+/** Handle the actual Alt+R chord; return whether it consumed this input. */
 export declare function handleReasoningShortcut(data: string, current: ReasoningFold, setReasoningFold: (fold: ReasoningFold) => void): boolean;
 /** Parse the whole command before applying any dimension. */
 export declare function applyDetailsArguments(rawInput: string, setToolsVisibility: (visibility: ToolCardVisibility) => void, setReasoningFold: (fold: ReasoningFold) => void, setContextVisibility: (visibility: ContextVisibility) => void): CommandResult;

@@ -1,5 +1,7 @@
 # dsh-family TUI output-verbosity / display-mode capability — research report
 
+Keyboard labels for our fork below use the current shortcuts, Alt+T for tool cards and Alt+R for reasoning. Other products' shortcuts remain as researched.
+
 **Date:** 2026-09-16 · **Scope:** how much control a user has over hiding model output detail
 (reasoning, tool inputs/outputs, file content, diffs) across the three scout TUI candidates.
 **Subjects:** #106 `@brianynwu/dsh-tui` (our fork, `/home/bwu/work/dsh-tui`) · #104 `ccch1mneyyy/dsh-TUI`
@@ -17,11 +19,11 @@ doing so.** All model output falls in three independently-controllable buckets:
 
 | Target | Control | Default |
 |---|---|---|
-| Model reasoning | `Ctrl+R` · `/details reasoning off` · config `showReasoning:false` (persists) | shown |
-| Tool calls — inputs, outputs, file content, diffs (all of it) | `Ctrl+O` cycles collapsed→expanded→**hidden** · `/details hidden` | collapsed |
+| Model reasoning | `Alt+R` · `/details reasoning off` · config `showReasoning:false` (persists) | shown |
+| Tool calls — inputs, outputs, file content, diffs (all of it) | `Alt+T` cycles collapsed→expanded→**hidden** · `/details hidden` | collapsed |
 | Collapsed tool-output length | config `maxToolOutputLines` (default 6) | 6-line head/tail |
 
-**"Just the conversation":** `Ctrl+R` (reasoning off) + `Ctrl+O` twice (→ `hidden`), or
+**"Just the conversation":** `Alt+R` (reasoning off) + `Alt+T` twice (→ `hidden`), or
 `/details hidden` + `/details reasoning off`. Left with your prompts + the assistant's final prose only.
 
 Why it works: all tool traffic — args, results, file reads, diffs — is rendered inside atomic **tool cards**
@@ -41,11 +43,11 @@ reasoning is binary (no collapsed-preview middle state).
 |---|---|---|---|
 | Render stack | self-contained pi-tui | own render (pi-family) | pi-tui, log-authoritative |
 | Default transcript density | detailed (collapsed cards) | detailed (collapsed) | **compact one-liners (fixed)** |
-| Hide reasoning entirely | ✅ Ctrl+R / `/details` / config default | ⚠️ collapse-to-preview only | ❌ always 80-char preview line |
+| Hide reasoning entirely | ✅ Alt+R / `/details` / config default | ⚠️ collapse-to-preview only | ❌ always 80-char preview line |
 | **Hide tool cards entirely (conversation-only)** | ✅ **only one of the three** | ❌ preview only | ❌ always a one-line row |
-| Expand full detail **inline** | ✅ Ctrl+O→expanded | ✅ Ctrl+O / per-card click | ❌ only via read-only overlay |
+| Expand full detail **inline** | ✅ Alt+T→expanded | ✅ Ctrl+O / per-card click | ❌ only via read-only overlay |
 | Configurable tool-output cap | ✅ `maxToolOutputLines` | ❌ hard-coded 3 | ❌ hard-coded (100 char / 20 shell) |
-| Runtime keyboard control of density | ✅ Ctrl+O / Ctrl+R / `/details` / dialog | ✅ Ctrl+O + Ctrl+E + per-card click | ❌ none (overlay ≠ transcript) |
+| Runtime keyboard control of density | ✅ Alt+T / Alt+R / `/details` / dialog | ✅ Ctrl+O + Ctrl+E + per-card click | ❌ none (overlay ≠ transcript) |
 | Static config surface | ⚠️ 2 fields | ✅ richest: `thinkingFold`, `diffLayout`, `foldTerminalCommand`, `minimal` | ❌ none |
 | On-demand detail overlay | ❌ | ❌ | ✅ Tool Cards / `/trajectory` browser |
 
@@ -75,14 +77,14 @@ Ranked; each cites the pattern it borrows.
 
 1. **Config default for tool-card visibility** — add `toolCardVisibility: 'collapsed'|'expanded'|'hidden'`
    (default `collapsed`) and seed `src/index.ts:347` from it exactly as `showReasoning` seeds line 344.
-   Closes the "must Ctrl+O every session" gap; lets a launch start quiet. Borrows tomowang's proven
+   Closes the "must Alt+T every session" gap; lets a launch start quiet. Borrows tomowang's proven
    compact-by-default stance while staying reversible. ~small, in-pattern.
 2. **One-shot "focus/quiet" preset** — a `/quiet` command and/or single keybind that sets reasoning off +
    tools hidden together (today: 3 keypresses across 2 controls), with an inverse to restore. Pairs with a
    config `startupView: full|quiet` umbrella.
 3. **Reasoning preview/fold middle state** — `reasoningFold: off|preview|full`, mirroring tomowang's 80-char
    `✦ think` line and chimney's `thinkingFold: preview|full`. The fork's reasoning is binary; a folded 1–3
-   line preview expandable via `Ctrl+R` matches the 3-state model tool cards already have.
+   line preview expandable via `Alt+R` matches the 3-state model tool cards already have.
 4. **On-demand detail overlay** — borrow tomowang's Tool Cards / `/trajectory` browser: keep the transcript
    quiet yet peek one tool's full output/diff WITHOUT flipping global visibility. Cleaner than per-card mouse
    state and fits the fork's keyboard-first / herdr-mobile context.

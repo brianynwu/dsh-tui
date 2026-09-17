@@ -361,7 +361,7 @@ export function createTuiChat(
   const todo = new TodoComponent(palette)
   const compactionStatusLine = new Text('', 0, 0)
   let reasoningFold: ReasoningFold = resolved.reasoningFold
-  // Ctrl+O cycles collapsed -> expanded -> hidden from the configured startup
+  // Alt+T cycles collapsed -> expanded -> hidden from the configured startup
   // state. Hidden drops cards; collapsed previews; expanded shows full bodies.
   let toolsVisibility: ToolCardVisibility = resolved.toolCardVisibility
   let contextVisibility: ContextVisibility = resolved.contextVisibility
@@ -1430,7 +1430,7 @@ export function createTuiChat(
   )
 
   // The selector and the argument grammar mutate the same closure state the
-  // Ctrl+O and Ctrl+R cycles drive, so every entry converges.
+  // Alt+T and Alt+R cycles drive, so every entry converges.
   let detailsOverlay: TuiOverlaySession | undefined
   const showDetailsSelector = (): void => {
     void detailsOverlay?.close()
@@ -1475,8 +1475,8 @@ export function createTuiChat(
     requestRender()
   }
 
-  // `/details` names the same transcript-detail state the Ctrl+O cycle and
-  // Ctrl+R cycle mutate, so a user can jump to a mode without cycling.
+  // `/details` names the same transcript-detail state the Alt+T cycle and
+  // Alt+R cycle mutate, so a user can jump to a mode without cycling.
   const runDetails = (rawInput: string): CommandResult => {
     if (rawInput.trim() === '') {
       showDetailsSelector()
@@ -1494,7 +1494,7 @@ export function createTuiChat(
     chat.addChild(new Text(palette.bold(palette.accent('Keyboard shortcuts')), 0, 0))
     chat.addChild(new Text([
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
-      'Esc cancel turn • Ctrl+O cycle cards • Ctrl+R cycle reasoning • Alt+C cycle context • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
+      'Esc cancel turn • Alt+T cycle cards • Alt+R cycle reasoning • Alt+C cycle context • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
       'Shift+Tab cycle permission (model picker: cycle effort)',
       'Ctrl+G or /agents browse child agents · ↑/↓ select · Enter view · Esc back',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
