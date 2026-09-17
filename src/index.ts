@@ -105,7 +105,7 @@ import {
   type Config,
   type ReasoningFold,
 } from './config.ts'
-import { applyDetailsArguments, handleReasoningShortcut } from './chat/details.ts'
+import { applyDetailsArguments, createQuietCommand, handleReasoningShortcut } from './chat/details.ts'
 import {
   ContextCardComponent,
   type ToolCardVisibility,
@@ -1323,6 +1323,13 @@ export function createTuiChat(
     appendNotice(`Reasoning display ${reasoningFold}.`)
   }
 
+  const runQuiet = createQuietCommand(
+    { tools: resolved.toolCardVisibility, reasoning: resolved.reasoningFold },
+    () => ({ tools: toolsVisibility, reasoning: reasoningFold }),
+    setToolsVisibility,
+    setReasoningFold,
+  )
+
   // The selector and the argument grammar mutate the same closure state the
   // Ctrl+O and Ctrl+R cycles drive, so every entry converges.
   let detailsOverlay: TuiOverlaySession | undefined
@@ -1549,6 +1556,12 @@ export function createTuiChat(
       description: 'Select tool-card visibility and reasoning display',
       input: { hint: '[collapsed|expanded|hidden] [reasoning off|preview|full]' },
       handler: ({ rawInput }) => runDetails(rawInput),
+    })
+    commandCtx.commands.register({
+      name: 'quiet',
+      description: 'Toggle conversation-only view and restore the prior details',
+      input: { hint: '[on|off]' },
+      handler: ({ rawInput }) => runQuiet(rawInput),
     })
     commandCtx.commands.register({
       name: 'palette',

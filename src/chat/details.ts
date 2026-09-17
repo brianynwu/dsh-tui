@@ -51,3 +51,47 @@ export function applyDetailsArguments(
   if (tools !== undefined) setToolsVisibility(tools)
   return { kind: 'success' }
 }
+
+/** The two session-local transcript-detail dimensions. */
+export interface TranscriptView {
+  readonly tools: ToolCardVisibility
+  readonly reasoning: ReasoningFold
+}
+
+const isQuiet = (view: TranscriptView): boolean => view.tools === 'hidden' && view.reasoning === 'off'
+const STOCK_VIEW: TranscriptView = { tools: 'collapsed', reasoning: 'full' }
+
+/** Build `/quiet` with one remembered non-quiet view for this TUI session. */
+export function createQuietCommand(
+  startup: TranscriptView,
+  current: () => TranscriptView,
+  setToolsVisibility: (visibility: ToolCardVisibility) => void,
+  setReasoningFold: (fold: ReasoningFold) => void,
+): (rawInput: string) => CommandResult {
+  const startupView = { ...startup }
+  let preQuiet: TranscriptView | undefined
+
+  return (rawInput: string): CommandResult => {
+    const mode = rawInput.trim()
+    if (mode !== '' && mode !== 'on' && mode !== 'off') {
+      return { kind: 'error', text: 'Usage: /quiet [on|off]' }
+    }
+
+    const before = current()
+    const turnOn = mode === 'on' || (mode === '' && !isQuiet(before))
+    if (turnOn) {
+      if (isQuiet(before)) return { kind: 'success' } // repeated on never overwrites the prior view
+      preQuiet = { ...before }
+      // Use the existing setters: reasoning rebuilds the transcript, then tools
+      // updates card visibility and turn folding on the rebuilt components.
+      setReasoningFold('off')
+      setToolsVisibility('hidden')
+    } else {
+      const restore = preQuiet ?? (isQuiet(startupView) ? STOCK_VIEW : startupView)
+      setReasoningFold(restore.reasoning)
+      setToolsVisibility(restore.tools)
+      preQuiet = undefined
+    }
+    return { kind: 'success' }
+  }
+}

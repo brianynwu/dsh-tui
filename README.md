@@ -11,9 +11,10 @@ It composes over the official `@deepseek-ai/dsh-base` bundle, so the whole plugi
 - Streaming model output and reasoning, rendered as Markdown
 - Reasoning display: Ctrl+R cycles full → off → three content rows plus an omission cue; `/details reasoning off|preview|full` selects a state directly. Set `reasoningFold` in the TUI config for the startup state (`showReasoning` remains a legacy alias).
 - Tool-call cards with terminal / diff / generic render intents; Ctrl+O cycles collapsed → expanded → hidden
+- `/quiet` hides cards and reasoning for this session; `/quiet off` restores the prior detail settings.
 - Approval and `ask_user_question` dialogs, plan-mode review included
 - `@file` path autocomplete and `@session` reference cards
-- Slash commands: `/model` (with reasoning-effort selection), `/resume`, `/compact`, `/details`, `/help`, and every command other plugins register
+- Slash commands: `/model` (with reasoning-effort selection), `/resume`, `/compact`, `/details`, `/quiet`, `/help`, and every command other plugins register
 - Standing todo panel, token usage and context-pressure status line, session titles
 - Configurable theme; truecolor detected from `COLORTERM`
 - In-place `/model` switching (mutates the selection ref — the same session continues, no fork/reseed)
