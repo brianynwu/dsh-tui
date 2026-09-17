@@ -32,6 +32,8 @@ export interface TuiThemeConfig {
 export interface TuiConfig {
   /** Render model reasoning blocks. */
   showReasoning?: boolean
+  /** Tool-card startup visibility; Ctrl+O can still change it for this session. */
+  toolCardVisibility?: 'hidden' | 'collapsed' | 'expanded'
   /** Maximum tool-card body lines retained in its collapsed head/tail preview. */
   maxToolOutputLines?: number
   /** Maximum added and removed lines explored while deriving an exact line diff. */
@@ -69,6 +71,9 @@ export interface TuiConfig {
 }
 
 const showReasoningSchema = z.boolean().default(true)
+const toolCardVisibilitySchema = z.union([
+  z.const('hidden'), z.const('collapsed'), z.const('expanded'),
+]).default('collapsed')
 const maxToolOutputLinesSchema = z.number().step(1).min(1).default(6)
 const maxDiffEditLengthSchema = z.number().step(1).min(1).default(1000)
 const maxQuestionOptionsSchema = z.number().step(1).min(1).default(8)
@@ -111,6 +116,7 @@ const titleSchema = z.string().default('DeepSeek Harness')
 
 const tuiConfigSchemaFields = {
   showReasoning: showReasoningSchema,
+  toolCardVisibility: toolCardVisibilitySchema,
   maxToolOutputLines: maxToolOutputLinesSchema,
   maxDiffEditLength: maxDiffEditLengthSchema,
   maxQuestionOptions: maxQuestionOptionsSchema,
@@ -165,6 +171,7 @@ export const Config: z<Config> = z.object({
   initialSkill: z.string(),
   resumeHint: z.string().default(DEFAULT_RESUME_HINT),
   showReasoning: tuiConfigSchemaFields.showReasoning,
+  toolCardVisibility: tuiConfigSchemaFields.toolCardVisibility,
   maxToolOutputLines: tuiConfigSchemaFields.maxToolOutputLines,
   maxDiffEditLength: tuiConfigSchemaFields.maxDiffEditLength,
   maxQuestionOptions: tuiConfigSchemaFields.maxQuestionOptions,
@@ -196,6 +203,7 @@ export interface ResolvedTuiThemeConfig {
 /** Fully defaulted TUI presentation settings. */
 export interface ResolvedTuiConfig {
   showReasoning: boolean
+  toolCardVisibility: 'hidden' | 'collapsed' | 'expanded'
   maxToolOutputLines: number
   maxDiffEditLength: number
   maxQuestionOptions: number
@@ -224,6 +232,7 @@ export interface ResolvedTuiConfig {
 export function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConfig {
   return {
     showReasoning: config?.showReasoning ?? true,
+    toolCardVisibility: config?.toolCardVisibility ?? 'collapsed',
     maxToolOutputLines: config?.maxToolOutputLines ?? 6,
     maxDiffEditLength: config?.maxDiffEditLength ?? 1000,
     maxQuestionOptions: config?.maxQuestionOptions ?? 8,

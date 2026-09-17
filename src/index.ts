@@ -342,9 +342,9 @@ export function createTuiChat(
   const todo = new TodoComponent(palette)
   const compactionStatusLine = new Text('', 0, 0)
   let showReasoning = resolved.showReasoning
-  // Ctrl+O cycles collapsed -> expanded -> hidden. Codex-style: hidden drops
-  // tool cards entirely, collapsed previews, expanded shows full bodies.
-  let toolsVisibility: ToolCardVisibility = 'collapsed'
+  // Ctrl+O cycles collapsed -> expanded -> hidden from the configured startup
+  // state. Hidden drops cards; collapsed previews; expanded shows full bodies.
+  let toolsVisibility: ToolCardVisibility = resolved.toolCardVisibility
   let streaming: StreamingAssistantComponent | undefined
   let completedStreaming: StreamingAssistantComponent | undefined
   // Live per-step phase for the status glyph, fed by `agent/assistant-stream`

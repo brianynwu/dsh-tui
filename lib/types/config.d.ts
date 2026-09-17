@@ -24,6 +24,8 @@ export interface TuiThemeConfig {
 export interface TuiConfig {
     /** Render model reasoning blocks. */
     showReasoning?: boolean;
+    /** Tool-card startup visibility; Ctrl+O can still change it for this session. */
+    toolCardVisibility?: 'hidden' | 'collapsed' | 'expanded';
     /** Maximum tool-card body lines retained in its collapsed head/tail preview. */
     maxToolOutputLines?: number;
     /** Maximum added and removed lines explored while deriving an exact line diff. */
@@ -101,6 +103,7 @@ export interface ResolvedTuiThemeConfig {
 /** Fully defaulted TUI presentation settings. */
 export interface ResolvedTuiConfig {
     showReasoning: boolean;
+    toolCardVisibility: 'hidden' | 'collapsed' | 'expanded';
     maxToolOutputLines: number;
     maxDiffEditLength: number;
     maxQuestionOptions: number;
