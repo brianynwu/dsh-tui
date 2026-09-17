@@ -1210,6 +1210,7 @@ export function createTuiChat(
     overlayManager,
     requestRender,
     isDisposed,
+    writeTerminal: bytes => { runtime.terminal.write(bytes) },
     questionMaxHeight: () => {
       const width = runtime.terminal.columns
       const editorRows = editor.render(width).length

@@ -33,6 +33,8 @@ export interface TuiThemeConfig {
 export interface TuiConfig {
   /** Composer shortcut overrides by action name. Invalid replacements are rejected as a whole. */
   keys?: Record<string, string>
+  /** Emit a fixed OSC 9 desktop notification for newly actionable user questions. */
+  notifications?: boolean
   /** Legacy reasoning visibility alias; `reasoningFold` takes precedence. */
   showReasoning?: boolean
   /** Reasoning display at startup. Unset preserves the legacy `showReasoning` setting. */
@@ -122,6 +124,7 @@ const titleSchema = z.string().default('DeepSeek Harness')
 
 const tuiConfigSchemaFields = {
   keys: z.dict(z.string()),
+  notifications: z.boolean().default(true),
   showReasoning: showReasoningSchema,
   reasoningFold: reasoningFoldSchema,
   toolCardVisibility: toolCardVisibilitySchema,
@@ -179,6 +182,7 @@ export const Config: z<Config> = z.object({
   initialSkill: z.string(),
   resumeHint: z.string().default(DEFAULT_RESUME_HINT),
   keys: tuiConfigSchemaFields.keys,
+  notifications: tuiConfigSchemaFields.notifications,
   showReasoning: tuiConfigSchemaFields.showReasoning,
   reasoningFold: tuiConfigSchemaFields.reasoningFold,
   toolCardVisibility: tuiConfigSchemaFields.toolCardVisibility,
@@ -213,6 +217,7 @@ export interface ResolvedTuiThemeConfig {
 /** Fully defaulted TUI presentation settings. */
 export interface ResolvedTuiConfig {
   keys: ResolvedTuiKeys
+  notifications: boolean
   reasoningFold: ReasoningFold
   toolCardVisibility: 'hidden' | 'collapsed' | 'expanded'
   maxToolOutputLines: number
@@ -243,6 +248,7 @@ export interface ResolvedTuiConfig {
 export function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConfig {
   return {
     keys: resolveKeymap(config?.keys),
+    notifications: config?.notifications ?? true,
     reasoningFold: config?.reasoningFold ?? ((config?.showReasoning ?? true) ? 'full' : 'off'),
     toolCardVisibility: config?.toolCardVisibility ?? 'collapsed',
     maxToolOutputLines: config?.maxToolOutputLines ?? 6,
