@@ -21,6 +21,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo'
+import type { ReasoningFold } from '../config.ts'
 import type {
   TerminalCallView,
   ToolCallView,
@@ -188,6 +189,28 @@ export class UserMessageComponent extends Container {
   }
 }
 
+const REASONING_PREVIEW_LINES = 3
+
+/** Preview Markdown after wrapping so the budget counts terminal rows. */
+class ReasoningPreviewComponent implements Component {
+  private readonly markdown: Markdown
+
+  constructor(reasoning: string, private readonly palette: Palette, mdTheme: MarkdownTheme) {
+    this.markdown = new Markdown(reasoning, 0, 0, mdTheme, { color: value => palette.dim(value), italic: true })
+  }
+
+  invalidate(): void {
+    this.markdown.invalidate()
+  }
+
+  render(width: number): string[] {
+    return preview(this.markdown.render(width), REASONING_PREVIEW_LINES, count => {
+      const cue = truncateToWidth(`… +${count} lines (Ctrl+R to expand)`, Math.max(1, width), '…')
+      return new Text(this.palette.dim(cue), 0, 0).render(width)[0] ?? ''
+    })
+  }
+}
+
 /**
  * Children of a settled assistant message: optional reasoning block then the
  * response text. A folded continuation (a later step of a turn while tool cards
@@ -196,14 +219,14 @@ export class UserMessageComponent extends Container {
  */
 function assistantMessageChildren(
   content: readonly ContentBlock[],
-  showReasoning: boolean,
+  reasoningFold: ReasoningFold,
   foldedContinuation: boolean,
   palette: Palette,
   mdTheme: MarkdownTheme,
 ): Component[] {
   const reasoning = displayText(textBlocks(content, 'reasoning').trim())
   const text = displayText(textBlocks(content, 'text').trim())
-  const showsReasoning = reasoning !== '' && showReasoning
+  const showsReasoning = reasoning !== '' && reasoningFold !== 'off'
   if (foldedContinuation && !showsReasoning && text === '') return []
   const children: Component[] = [new Spacer(1)]
   if (!foldedContinuation) {
@@ -212,7 +235,9 @@ function assistantMessageChildren(
   if (showsReasoning) {
     children.push(
       new Text(palette.italic(palette.dim('Reasoning')), 0, 0),
-      new Markdown(reasoning, 0, 0, mdTheme, { color: value => palette.dim(value), italic: true }),
+      reasoningFold === 'preview'
+        ? new ReasoningPreviewComponent(reasoning, palette, mdTheme)
+        : new Markdown(reasoning, 0, 0, mdTheme, { color: value => palette.dim(value), italic: true }),
     )
   }
   if (text) children.push(assistantTextMarkdown(text, palette, mdTheme))
@@ -293,7 +318,7 @@ export class StreamingAssistantComponent extends Container {
     events: () => readonly SessionEvent[],
     tracker: StepTimingTracker,
     now: () => number,
-    private showReasoning: boolean,
+    private reasoningFold: ReasoningFold,
     private readonly palette: Palette,
     private readonly mdTheme: MarkdownTheme,
   ) {
@@ -352,12 +377,9 @@ export class StreamingAssistantComponent extends Container {
     this.timing.invalidate()
   }
 
-  /**
-   * Toggle whether reasoning blocks render, then re-render.
-   * @param show - Whether to show reasoning blocks.
-   */
-  setShowReasoning(show: boolean): void {
-    this.showReasoning = show
+  /** Change the reasoning display phase, then re-render. */
+  setReasoningFold(fold: ReasoningFold): void {
+    this.reasoningFold = fold
     this.rebuild()
   }
 
@@ -380,7 +402,7 @@ export class StreamingAssistantComponent extends Container {
   hasVisibleBody(): boolean {
     const content = this.presentedContent()
     return textBlocks(content, 'text').trim() !== ''
-      || (this.showReasoning && textBlocks(content, 'reasoning').trim() !== '')
+      || (this.reasoningFold !== 'off' && textBlocks(content, 'reasoning').trim() !== '')
   }
 
   /** The settled content when available, otherwise the streamed blocks in model order. */
@@ -398,7 +420,7 @@ export class StreamingAssistantComponent extends Container {
     this.clear()
     const children = assistantMessageChildren(
       this.presentedContent(),
-      this.showReasoning,
+      this.reasoningFold,
       this.foldedContinuation,
       this.palette,
       this.mdTheme,

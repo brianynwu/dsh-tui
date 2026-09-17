@@ -9,6 +9,7 @@
 ## 功能
 
 - 模型输出与思考过程的流式 Markdown 渲染
+- 思考过程显示：Ctrl+R 依次切换完整 → 隐藏 → 三行内容预览（另有省略提示）；`/details reasoning off|preview|full` 可直接选择。TUI 配置中的 `reasoningFold` 指定启动状态（`showReasoning` 保留为旧版别名）。
 - 工具调用卡片（terminal / diff / generic 三种渲染意图）；Ctrl+O 三档切换：预览 → 展开 → 隐藏
 - 工具审批与 `ask_user_question` 对话框，含 plan 模式评审
 - `@文件` 路径自动补全与 `@session` 会话引用卡片

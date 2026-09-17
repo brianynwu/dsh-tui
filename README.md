@@ -9,6 +9,7 @@ It composes over the official `@deepseek-ai/dsh-base` bundle, so the whole plugi
 ## Features
 
 - Streaming model output and reasoning, rendered as Markdown
+- Reasoning display: Ctrl+R cycles full → off → three content rows plus an omission cue; `/details reasoning off|preview|full` selects a state directly. Set `reasoningFold` in the TUI config for the startup state (`showReasoning` remains a legacy alias).
 - Tool-call cards with terminal / diff / generic render intents; Ctrl+O cycles collapsed → expanded → hidden
 - Approval and `ask_user_question` dialogs, plan-mode review included
 - `@file` path autocomplete and `@session` reference cards

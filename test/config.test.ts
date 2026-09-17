@@ -25,19 +25,43 @@ describe('tool-card startup visibility', () => {
 
   it('keeps the existing showReasoning false setting intact', () => {
     const parsed = Config({ showReasoning: false })
-    expect(resolveTuiConfig(parsed).showReasoning).toBe(false)
+    expect(resolveTuiConfig(parsed).reasoningFold).toBe('off')
   })
 })
 
-describe('stock reasoning render baseline for the next change', () => {
-  it('renders the settled assistant message exactly as before C1', () => {
+describe('reasoning fold configuration', () => {
+  it('keeps the optional schema field unset while resolving stock to full', () => {
+    expect(TuiConfigSchema({}).reasoningFold).toBeUndefined()
+    expect(Config({}).reasoningFold).toBeUndefined()
+    expect(resolveTuiConfig(undefined).reasoningFold).toBe('full')
+    expect(resolveTuiConfig(Config({})).reasoningFold).toBe('full')
+  })
+
+  it.each(['off', 'preview', 'full'] as const)('accepts explicit %s over the legacy alias', fold => {
+    const parsed = Config({ reasoningFold: fold, showReasoning: fold === 'off' })
+    expect(resolveTuiConfig(parsed).reasoningFold).toBe(fold)
+  })
+
+  it('rejects an invalid fold at both schema boundaries', () => {
+    expect(() => TuiConfigSchema({ reasoningFold: 'collapsed' })).toThrow()
+    expect(() => Config({ reasoningFold: 'collapsed' })).toThrow()
+  })
+
+  it('preserves the legacy true and false meanings for direct callers', () => {
+    expect(resolveTuiConfig({ showReasoning: true }).reasoningFold).toBe('full')
+    expect(resolveTuiConfig({ showReasoning: false }).reasoningFold).toBe('off')
+  })
+})
+
+describe('stock reasoning render baseline captured at C1', () => {
+  it('renders the settled assistant message exactly as before C2', () => {
     const palette = createPalette(false)
     const component = new StreamingAssistantComponent(
       { turn: 0, step: 0 },
       () => [],
       new StepTimingTracker(),
       () => 0,
-      resolveTuiConfig(undefined).showReasoning,
+      resolveTuiConfig(undefined).reasoningFold,
       palette,
       markdownTheme(palette),
     )
