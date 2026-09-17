@@ -29,6 +29,8 @@ import type { AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions'
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START, displayText, sanitizePastedText } from './text.ts'
 import { dialogSelectTheme, type Palette } from './theme.ts'
 import type { ToolCardVisibility } from './transcript.ts'
+import type { ReasoningFold } from '../config.ts'
+import { nextReasoningFold } from '../chat/details.ts'
 import {
   renderTuiPromptTemplate,
   type TuiPromptTemplateToken,
@@ -429,8 +431,8 @@ export class ModelDialog implements Component {
 
 /** Both transcript-detail dimensions, applied immediately on each Tab. */
 export interface DetailsSelection {
-  readonly visibility: ToolCardVisibility
-  readonly showReasoning: boolean
+  readonly tools: ToolCardVisibility
+  readonly reasoning: ReasoningFold
 }
 
 const TOOL_CARD_PHASES: readonly ToolCardVisibility[] = ['collapsed', 'expanded', 'hidden']
@@ -448,19 +450,15 @@ export class DetailsDialog implements Component {
 
   constructor(
     private visibility: ToolCardVisibility,
-    private showReasoning: boolean,
+    private reasoningFold: ReasoningFold,
     private readonly palette: Palette,
     private readonly apply: (selection: DetailsSelection) => void,
     private readonly close: () => void,
   ) {
     this.toolsItem = { value: 'tools', label: 'Tool cards', description: visibility }
-    this.reasoningItem = { value: 'reasoning', label: 'Reasoning', description: this.reasoningLabel() }
+    this.reasoningItem = { value: 'reasoning', label: 'Reasoning', description: reasoningFold }
     this.list = new SelectList([this.toolsItem, this.reasoningItem], 2, dialogSelectTheme(palette))
     this.list.onSelect = close
-  }
-
-  private reasoningLabel(): string {
-    return this.showReasoning ? 'shown' : 'hidden'
   }
 
   /** Cycle the highlighted entry one step and apply the new state. */
@@ -473,10 +471,10 @@ export class DetailsDialog implements Component {
       this.visibility = TOOL_CARD_PHASES[(index + 1) % TOOL_CARD_PHASES.length] as ToolCardVisibility
       this.toolsItem.description = this.visibility
     } else {
-      this.showReasoning = !this.showReasoning
-      this.reasoningItem.description = this.reasoningLabel()
+      this.reasoningFold = nextReasoningFold(this.reasoningFold)
+      this.reasoningItem.description = this.reasoningFold
     }
-    this.apply({ visibility: this.visibility, showReasoning: this.showReasoning })
+    this.apply({ tools: this.visibility, reasoning: this.reasoningFold })
   }
 
   invalidate(): void {
@@ -495,7 +493,7 @@ export class DetailsDialog implements Component {
     return renderDialog('Transcript details', [
       ...this.list.render(innerWidth),
       '',
-      this.palette.dim('↑/↓ move • Tab toggle • Enter/Esc close'),
+      this.palette.dim('↑/↓ move • Tab cycle • Enter/Esc close'),
     ], width, this.palette)
   }
 }

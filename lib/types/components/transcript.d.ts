@@ -9,6 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo';
+import type { ReasoningFold } from '../config.ts';
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 import { type Palette } from './theme.ts';
 import { type ParsedArguments } from './content.ts';
@@ -71,7 +72,7 @@ declare class StepTimingComponent extends Container {
 export declare class StreamingAssistantComponent extends Container {
     /** The step's turn/step coordinates, used to group steps into their turn. */
     readonly position: StepPosition;
-    private showReasoning;
+    private reasoningFold;
     private readonly palette;
     private readonly mdTheme;
     private readonly blocks;
@@ -85,7 +86,7 @@ export declare class StreamingAssistantComponent extends Container {
     readonly timing: StepTimingComponent;
     constructor(
     /** The step's turn/step coordinates, used to group steps into their turn. */
-    position: StepPosition, events: () => readonly SessionEvent[], tracker: StepTimingTracker, now: () => number, showReasoning: boolean, palette: Palette, mdTheme: MarkdownTheme);
+    position: StepPosition, events: () => readonly SessionEvent[], tracker: StepTimingTracker, now: () => number, reasoningFold: ReasoningFold, palette: Palette, mdTheme: MarkdownTheme);
     /**
      * Replace the streamed blocks with the step's settled content.
      * @param content - The settled assistant content blocks.
@@ -107,11 +108,8 @@ export declare class StreamingAssistantComponent extends Container {
      * @param chunk - The streamed assistant chunk.
      */
     update(chunk: StreamChunk): void;
-    /**
-     * Toggle whether reasoning blocks render, then re-render.
-     * @param show - Whether to show reasoning blocks.
-     */
-    setShowReasoning(show: boolean): void;
+    /** Change the reasoning display phase, then re-render. */
+    setReasoningFold(fold: ReasoningFold): void;
     /**
      * Mark this step as a folded continuation of its turn: no `Assistant` header,
      * and no output at all while the step has no visible body. Used while tool
@@ -184,7 +182,10 @@ export declare class ToolCardComponent extends CachedCardComponent {
      * @param visibility - Hidden, collapsed preview, or full body.
      */
     setVisibility(visibility: ToolCardVisibility): void;
+    /** Render the retained card at full detail without changing its transcript phase. */
+    renderFull(width: number): string[];
     protected renderLines(width: number): string[];
+    private renderCard;
     /** The pending terminal call view, when this row is a terminal card. */
     private terminalPending;
     /**

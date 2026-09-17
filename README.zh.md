@@ -9,10 +9,13 @@
 ## 功能
 
 - 模型输出与思考过程的流式 Markdown 渲染
+- 思考过程显示：Ctrl+R 依次切换完整 → 隐藏 → 三行内容预览（另有省略提示）；`/details reasoning off|preview|full` 可直接选择。TUI 配置中的 `reasoningFold` 指定启动状态（`showReasoning` 保留为旧版别名）。
 - 工具调用卡片（terminal / diff / generic 三种渲染意图）；Ctrl+O 三档切换：预览 → 展开 → 隐藏
+- `/quiet` 在当前会话隐藏工具卡片和思考过程；`/quiet off` 恢复之前的显示设置。
+- `/cards` 或 Ctrl+T 可只读浏览所有工具卡片的完整输出，即使卡片已隐藏。用 ←/→ 切换卡片，↑/↓ 或 PgUp/PgDn 滚动，Esc/q 关闭。
 - 工具审批与 `ask_user_question` 对话框，含 plan 模式评审
 - `@文件` 路径自动补全与 `@session` 会话引用卡片
-- 斜杠命令：`/model`（含推理力度选择）、`/resume`、`/compact`、`/details`、`/help`，以及其他插件注册的全部命令
+- 斜杠命令：`/model`（含推理力度选择）、`/resume`、`/compact`、`/details`、`/quiet`、`/cards`、`/help`，以及其他插件注册的全部命令
 - 常驻 todo 面板、token 用量与上下文压力状态栏、会话标题
 - 可配置主题；从 `COLORTERM` 自动检测真彩色
 - `/model` 原地切换（改写 selection ref——同一会话继续，不 fork、不 reseed）

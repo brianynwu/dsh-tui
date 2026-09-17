@@ -103,7 +103,10 @@ import {
   formatResumeHint,
   resolveTuiConfig,
   type Config,
+  type ReasoningFold,
 } from './config.ts'
+import { applyDetailsArguments, createQuietCommand, handleReasoningShortcut } from './chat/details.ts'
+import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
   type ToolCardVisibility,
@@ -169,6 +172,7 @@ export {
   Config,
   type ResolvedTuiConfig,
   type ResolvedTuiThemeConfig,
+  type ReasoningFold,
   type TuiConfig,
   type TuiThemeConfig,
 } from './config.ts'
@@ -341,10 +345,10 @@ export function createTuiChat(
   editor.hintPrefix = initialInputPrompt
   const todo = new TodoComponent(palette)
   const compactionStatusLine = new Text('', 0, 0)
-  let showReasoning = resolved.showReasoning
-  // Ctrl+O cycles collapsed -> expanded -> hidden. Codex-style: hidden drops
-  // tool cards entirely, collapsed previews, expanded shows full bodies.
-  let toolsVisibility: ToolCardVisibility = 'collapsed'
+  let reasoningFold: ReasoningFold = resolved.reasoningFold
+  // Ctrl+O cycles collapsed -> expanded -> hidden from the configured startup
+  // state. Hidden drops cards; collapsed previews; expanded shows full bodies.
+  let toolsVisibility: ToolCardVisibility = resolved.toolCardVisibility
   let streaming: StreamingAssistantComponent | undefined
   let completedStreaming: StreamingAssistantComponent | undefined
   // Live per-step phase for the status glyph, fed by `agent/assistant-stream`
@@ -894,7 +898,7 @@ export function createTuiChat(
       () => agent.session.snapshotEvents(),
       stepTimingTracker,
       now,
-      showReasoning,
+      reasoningFold,
       palette,
       mdTheme,
     )
@@ -1305,37 +1309,42 @@ export function createTuiChat(
       : toolsVisibility === 'expanded' ? 'hidden' : 'collapsed')
   }
 
-  const setReasoning = (show: boolean): void => {
-    showReasoning = show
+  const setReasoningFold = (fold: ReasoningFold): void => {
+    reasoningFold = fold
     const activeStreaming = streaming
     rebuildTranscript(false)
     /* v8 ignore next -- the non-streaming command path is covered; this branch preserves an active stream across rebuild. */
     if (activeStreaming !== undefined) {
       streaming = activeStreaming
-      streaming.setShowReasoning(showReasoning)
+      streaming.setReasoningFold(reasoningFold)
       registerAssistantStep(activeStreaming)
       chat.addChild(activeStreaming)
       chat.addChild(activeStreaming.timing)
     }
-    appendNotice(`Reasoning blocks ${showReasoning ? 'shown' : 'hidden'}.`)
+    appendNotice(`Reasoning display ${reasoningFold}.`)
   }
 
-  const toggleReasoning = (): void => { setReasoning(!showReasoning) }
+  const runQuiet = createQuietCommand(
+    { tools: resolved.toolCardVisibility, reasoning: resolved.reasoningFold },
+    () => ({ tools: toolsVisibility, reasoning: reasoningFold }),
+    setToolsVisibility,
+    setReasoningFold,
+  )
 
   // The selector and the argument grammar mutate the same closure state the
-  // Ctrl+O cycle and Ctrl+R toggle drive, so every entry converges.
+  // Ctrl+O and Ctrl+R cycles drive, so every entry converges.
   let detailsOverlay: TuiOverlaySession | undefined
   const showDetailsSelector = (): void => {
     void detailsOverlay?.close()
     const session = overlayManager.open({
       create: () => new DetailsDialog(
         toolsVisibility,
-        showReasoning,
+        reasoningFold,
         palette,
         // Each Tab applies immediately; one dimension changes per call.
         (selection: DetailsSelection) => {
-          if (selection.showReasoning !== showReasoning) setReasoning(selection.showReasoning)
-          if (selection.visibility !== toolsVisibility) setToolsVisibility(selection.visibility)
+          if (selection.reasoning !== reasoningFold) setReasoningFold(selection.reasoning)
+          if (selection.tools !== toolsVisibility) setToolsVisibility(selection.tools)
         },
         () => { void session.close() },
       ),
@@ -1348,35 +1357,32 @@ export function createTuiChat(
     requestRender()
   }
 
+  let cardsOverlay: TuiOverlaySession | undefined
+  const showCards = (): void => {
+    void cardsOverlay?.close()
+    const width = cardsOverlayWidth(runtime.terminal.columns)
+    const session = overlayManager.open({
+      create: host => new CardsOverlay(
+        [...allToolCards], width, () => runtime.terminal.rows, palette,
+        () => host.invalidate(), () => host.close(),
+      ),
+      options: { width, maxHeight: '80%', anchor: 'center', margin: 1 },
+    })
+    cardsOverlay = session
+    void session.closed.then(() => {
+      if (cardsOverlay === session) cardsOverlay = undefined
+    })
+    requestRender()
+  }
+
   // `/details` names the same transcript-detail state the Ctrl+O cycle and
-  // Ctrl+R toggle mutate, so a user can jump to a mode without cycling.
+  // Ctrl+R cycle mutate, so a user can jump to a mode without cycling.
   const runDetails = (rawInput: string): CommandResult => {
-    const tokens = rawInput.split(/\s+/u).filter(token => token !== '')
-    if (tokens.length === 0) {
+    if (rawInput.trim() === '') {
       showDetailsSelector()
       return { kind: 'success' }
     }
-    let visibility: ToolCardVisibility | undefined
-    let reasoning: boolean | undefined
-    for (let token = tokens.shift(); token !== undefined; token = tokens.shift()) {
-      if (token === 'collapsed' || token === 'expanded' || token === 'hidden') {
-        visibility = token
-      } else if (token === 'reasoning') {
-        const value = tokens[0]
-        if (value === 'on' || value === 'off') {
-          tokens.shift()
-          reasoning = value === 'on'
-        } else {
-          reasoning = !showReasoning
-        }
-      } else {
-        return { kind: 'error', text: `Unknown /details argument "${token}". Usage: /details [collapsed|expanded|hidden] [reasoning [on|off]]` }
-      }
-    }
-    // Reasoning first: its transcript rebuild would drop the visibility notice.
-    if (reasoning !== undefined) setReasoning(reasoning)
-    if (visibility !== undefined) setToolsVisibility(visibility)
-    return { kind: 'success' }
+    return applyDetailsArguments(rawInput, setToolsVisibility, setReasoningFold)
   }
 
   const showHelp = (): void => {
@@ -1388,7 +1394,7 @@ export function createTuiChat(
     chat.addChild(new Text(palette.bold(palette.accent('Keyboard shortcuts')), 0, 0))
     chat.addChild(new Text([
       'Enter send • Shift/Alt+Enter newline • Up/Down prompt history',
-      'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R toggle reasoning • Ctrl+L redraw',
+      'Esc cancel turn • Ctrl+O cycle cards (collapse/expand/hide) • Ctrl+R cycle reasoning • Ctrl+T or /cards browse full cards • Ctrl+L redraw',
       'Ctrl+C cancel while running; clear input or exit while idle • Ctrl+D exit',
       '',
       ...commandLines,
@@ -1436,7 +1442,7 @@ export function createTuiChat(
         ['Session', displayText(agent.session.id)],
         ['Title', displayText(sessionTitle ?? 'untitled')],
         ['Directory', displayText(cwd)],
-        ['Model', `${model} ${palette.dim(`(effort ${effort}; reasoning blocks ${showReasoning ? 'shown' : 'hidden'})`)}`],
+        ['Model', `${model} ${palette.dim(`(effort ${effort}; reasoning ${reasoningFold})`)}`],
       ],
       [
         ['Agent', [
@@ -1567,8 +1573,19 @@ export function createTuiChat(
     commandCtx.commands.register({
       name: 'details',
       description: 'Select tool-card visibility and reasoning display',
-      input: { hint: '[collapsed|expanded|hidden] [reasoning [on|off]]' },
+      input: { hint: '[collapsed|expanded|hidden] [reasoning off|preview|full]' },
       handler: ({ rawInput }) => runDetails(rawInput),
+    })
+    commandCtx.commands.register({
+      name: 'quiet',
+      description: 'Toggle conversation-only view and restore the prior details',
+      input: { hint: '[on|off]' },
+      handler: ({ rawInput }) => runQuiet(rawInput),
+    })
+    commandCtx.commands.register({
+      name: 'cards',
+      description: 'Browse full tool-card details without changing the transcript',
+      handler: () => { showCards(); return { kind: 'success' } },
     })
     commandCtx.commands.register({
       name: 'palette',
@@ -1828,12 +1845,15 @@ export function createTuiChat(
 
   const removeInputListener = ui.addInputListener((data) => {
     if (overlayManager.hasActiveOverlay()) return undefined
+    if (matchesKey(data, Key.ctrl('t'))) {
+      showCards()
+      return { consume: true }
+    }
     if (matchesKey(data, Key.ctrl('o'))) {
       toggleTools()
       return { consume: true }
     }
-    if (matchesKey(data, Key.ctrl('r'))) {
-      toggleReasoning()
+    if (handleReasoningShortcut(data, reasoningFold, setReasoningFold)) {
       return { consume: true }
     }
     if (matchesKey(data, Key.ctrl('l'))) {

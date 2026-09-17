@@ -13,7 +13,7 @@ export { TuiPromptService } from './prompt.ts';
 export { TuiDashboardService, type DashboardGroup, type DashboardMetric } from './dashboard.ts';
 export { renderSkillInvocation } from './chat/skill-invocation.ts';
 export type { TuiResumeHost, TuiRuntime } from './runtime.ts';
-export { resolveTuiConfig, TuiConfigSchema, Config, type ResolvedTuiConfig, type ResolvedTuiThemeConfig, type TuiConfig, type TuiThemeConfig, } from './config.ts';
+export { resolveTuiConfig, TuiConfigSchema, Config, type ResolvedTuiConfig, type ResolvedTuiThemeConfig, type ReasoningFold, type TuiConfig, type TuiThemeConfig, } from './config.ts';
 export { DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES, DEFAULT_FILE_SEARCH_MAX_ENTRIES, DEFAULT_FILE_SEARCH_MAX_RESULTS, } from './chat/file-autocomplete.ts';
 export type { TuiComponent, TuiFocusable, TuiOverlayAnchor, TuiOverlayCloseReason, TuiOverlayHost, TuiOverlayMargin, TuiOverlayOptions, TuiOverlayOutcome, TuiOverlayRequest, TuiOverlaySession, TuiOverlayState, TuiTheme, TuiViewport, } from './extension/types.ts';
 declare module '@deepseek-ai/cordis' {

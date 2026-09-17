@@ -13,6 +13,7 @@ import type { SessionRecord } from '@deepseek-ai/dsh-session-query';
 import type { AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions';
 import { type Palette } from './theme.ts';
 import type { ToolCardVisibility } from './transcript.ts';
+import type { ReasoningFold } from '../config.ts';
 import { type TuiPromptTemplateToken } from '../prompt.ts';
 /** A selectable model advertised by a provider, with its display name, description, and reasoning metadata. */
 export interface ModelChoice extends ModelSelection {
@@ -145,8 +146,8 @@ export declare class ModelDialog implements Component {
 }
 /** Both transcript-detail dimensions, applied immediately on each Tab. */
 export interface DetailsSelection {
-    readonly visibility: ToolCardVisibility;
-    readonly showReasoning: boolean;
+    readonly tools: ToolCardVisibility;
+    readonly reasoning: ReasoningFold;
 }
 /**
  * Keyboard toggle over the two transcript-detail entries — tool-card
@@ -156,15 +157,14 @@ export interface DetailsSelection {
  */
 export declare class DetailsDialog implements Component {
     private visibility;
-    private showReasoning;
+    private reasoningFold;
     private readonly palette;
     private readonly apply;
     private readonly close;
     private readonly list;
     private readonly toolsItem;
     private readonly reasoningItem;
-    constructor(visibility: ToolCardVisibility, showReasoning: boolean, palette: Palette, apply: (selection: DetailsSelection) => void, close: () => void);
-    private reasoningLabel;
+    constructor(visibility: ToolCardVisibility, reasoningFold: ReasoningFold, palette: Palette, apply: (selection: DetailsSelection) => void, close: () => void);
     /** Cycle the highlighted entry one step and apply the new state. */
     private cycle;
     invalidate(): void;

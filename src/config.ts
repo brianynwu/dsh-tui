@@ -30,8 +30,12 @@ export interface TuiThemeConfig {
 
 /** Interaction and presentation settings for the pi-tui terminal mode. */
 export interface TuiConfig {
-  /** Render model reasoning blocks. */
+  /** Legacy reasoning visibility alias; `reasoningFold` takes precedence. */
   showReasoning?: boolean
+  /** Reasoning display at startup. Unset preserves the legacy `showReasoning` setting. */
+  reasoningFold?: ReasoningFold
+  /** Tool-card startup visibility; Ctrl+O can still change it for this session. */
+  toolCardVisibility?: 'hidden' | 'collapsed' | 'expanded'
   /** Maximum tool-card body lines retained in its collapsed head/tail preview. */
   maxToolOutputLines?: number
   /** Maximum added and removed lines explored while deriving an exact line diff. */
@@ -68,7 +72,15 @@ export interface TuiConfig {
   title?: string
 }
 
+/** Reasoning display phases, independent of tool-card visibility. */
+export type ReasoningFold = 'off' | 'preview' | 'full'
+
 const showReasoningSchema = z.boolean().default(true)
+// No default: an injected value would mask a legacy showReasoning:false config.
+const reasoningFoldSchema = z.union([z.const('off'), z.const('preview'), z.const('full')])
+const toolCardVisibilitySchema = z.union([
+  z.const('hidden'), z.const('collapsed'), z.const('expanded'),
+]).default('collapsed')
 const maxToolOutputLinesSchema = z.number().step(1).min(1).default(6)
 const maxDiffEditLengthSchema = z.number().step(1).min(1).default(1000)
 const maxQuestionOptionsSchema = z.number().step(1).min(1).default(8)
@@ -111,6 +123,8 @@ const titleSchema = z.string().default('DeepSeek Harness')
 
 const tuiConfigSchemaFields = {
   showReasoning: showReasoningSchema,
+  reasoningFold: reasoningFoldSchema,
+  toolCardVisibility: toolCardVisibilitySchema,
   maxToolOutputLines: maxToolOutputLinesSchema,
   maxDiffEditLength: maxDiffEditLengthSchema,
   maxQuestionOptions: maxQuestionOptionsSchema,
@@ -165,6 +179,8 @@ export const Config: z<Config> = z.object({
   initialSkill: z.string(),
   resumeHint: z.string().default(DEFAULT_RESUME_HINT),
   showReasoning: tuiConfigSchemaFields.showReasoning,
+  reasoningFold: tuiConfigSchemaFields.reasoningFold,
+  toolCardVisibility: tuiConfigSchemaFields.toolCardVisibility,
   maxToolOutputLines: tuiConfigSchemaFields.maxToolOutputLines,
   maxDiffEditLength: tuiConfigSchemaFields.maxDiffEditLength,
   maxQuestionOptions: tuiConfigSchemaFields.maxQuestionOptions,
@@ -195,7 +211,8 @@ export interface ResolvedTuiThemeConfig {
 
 /** Fully defaulted TUI presentation settings. */
 export interface ResolvedTuiConfig {
-  showReasoning: boolean
+  reasoningFold: ReasoningFold
+  toolCardVisibility: 'hidden' | 'collapsed' | 'expanded'
   maxToolOutputLines: number
   maxDiffEditLength: number
   maxQuestionOptions: number
@@ -223,7 +240,8 @@ export interface ResolvedTuiConfig {
  */
 export function resolveTuiConfig(config: TuiConfig | undefined): ResolvedTuiConfig {
   return {
-    showReasoning: config?.showReasoning ?? true,
+    reasoningFold: config?.reasoningFold ?? ((config?.showReasoning ?? true) ? 'full' : 'off'),
+    toolCardVisibility: config?.toolCardVisibility ?? 'collapsed',
     maxToolOutputLines: config?.maxToolOutputLines ?? 6,
     maxDiffEditLength: config?.maxDiffEditLength ?? 1000,
     maxQuestionOptions: config?.maxQuestionOptions ?? 8,
