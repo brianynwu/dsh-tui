@@ -161,6 +161,7 @@ export interface SubagentSwitcher {
   readonly rows: readonly SubagentRow[]
   readonly selectedId: SessionId | undefined
   refresh(): Promise<void>
+  open(): Promise<boolean>
   next(): void
   prev(): void
   back(): void
@@ -286,6 +287,14 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
     get rows() { return rows },
     get selectedId() { return selectedId },
     refresh,
+    open: async () => {
+      await refresh()
+      if (disposed) return false
+      const first = rows.find(row => row.kind === 'child')
+      if (first?.kind !== 'child') return false
+      if (selectedId === undefined) select(first.id)
+      return selectedId !== undefined
+    },
     next: () => selectRelative(1),
     prev: () => selectRelative(-1),
     back,

@@ -37,6 +37,7 @@ export interface SubagentSwitcher {
     readonly rows: readonly SubagentRow[];
     readonly selectedId: SessionId | undefined;
     refresh(): Promise<void>;
+    open(): Promise<boolean>;
     next(): void;
     prev(): void;
     back(): void;

@@ -70,8 +70,9 @@ describe('read-only child transcript', () => {
       onRender: () => {}, onError: message => { errors.push(message) },
     })
     try {
-      await switcher.refresh()
-      switcher.next()
+      expect(await switcher.open()).toBe(true)
+      expect(switcher.selectedId).toBe(childId)
+      expect(views.at(-1)).toHaveProperty('text', expect.stringContaining('Loading child'))
       const emit = listeners.get('session/event')!
       emit({ id: childId }, event(1, 'during snapshot'))
       const release = vi.fn()
@@ -88,6 +89,49 @@ describe('read-only child transcript', () => {
       expect(views.at(-1)).toBeUndefined()
       expect(listeners.has('session/event')).toBe(false)
       expect(selected.at(-1)).toBeUndefined()
+    } finally {
+      switcher.dispose()
+    }
+  })
+
+  it('leaves the main view alone when the child catalog is empty', async () => {
+    const views: unknown[] = []
+    const ctx = {
+      agents: { get: () => undefined, isOwnedBy: () => false },
+      subagents: { listChildren: async () => [] },
+      on: () => () => {},
+    } as unknown as Context
+    const switcher = createSubagentSwitcher({
+      ctx, main, palette: createPalette(false), resolved: resolveTuiConfig(undefined),
+      onRows: () => {}, onView: view => { views.push(view) },
+      onRender: () => {}, onError: () => {},
+    })
+    try {
+      expect(await switcher.open()).toBe(false)
+      expect(switcher.selectedId).toBeUndefined()
+      expect(views).toEqual([])
+    } finally {
+      switcher.dispose()
+    }
+  })
+
+  it('does not claim an open child view when transcript observation is unavailable', async () => {
+    const errors: string[] = []
+    const ctx = {
+      agents: { get: () => child, isOwnedBy: () => true },
+      subagents: { listChildren: async () => [row] },
+      get: () => undefined,
+      on: () => () => {},
+    } as unknown as Context
+    const switcher = createSubagentSwitcher({
+      ctx, main, palette: createPalette(false), resolved: resolveTuiConfig(undefined),
+      onRows: () => {}, onView: () => {}, onRender: () => {},
+      onError: message => { errors.push(message) },
+    })
+    try {
+      expect(await switcher.open()).toBe(false)
+      expect(switcher.selectedId).toBeUndefined()
+      expect(errors).toContain('Child transcript service is unavailable.')
     } finally {
       switcher.dispose()
     }
