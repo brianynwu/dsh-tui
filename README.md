@@ -2,92 +2,68 @@
 
 English | [中文](README.zh.md)
 
-An interactive terminal (TUI) front door for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) agents — a Claude Code / Codex-style chat interface in your terminal, installed as an out-of-tree dsh plugin bundle. Built on [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui).
+A maintained terminal interface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) agents. It runs as an out-of-tree plugin over the official `@deepseek-ai/dsh-base` bundle and uses [pi-tui](https://www.npmjs.com/package/@earendil-works/pi-tui) for rendering. The Harness plugin ecosystem stays intact: tools, skills, subagents, workflows, approvals, and sessions come from the host. Model changes through `/model` stay in the **same session**.
 
-It composes over the official `@deepseek-ai/dsh-base` bundle, so the whole plugin ecosystem — shell and filesystem tools, skills, subagents, workflows, sandbox approvals — is the same one the official web surface uses. The dsh plugin ecosystem is **not** forked; the only vendored code is the terminal `Editor` widget (see [Compatibility](#compatibility)).
+## What it does
 
-## Features
+- **Readable live transcript.** Streamed Markdown, reasoning, and LaTeX appear in a full-screen viewport. Scroll with PageUp/PageDown or the mouse wheel, search the transcript, and select text with the mouse. The editor, questions, and metrics stay visible below the scroll area.
+- **Independent detail controls.** Alt+T cycles tool cards through collapsed, expanded, and hidden. Alt+R cycles reasoning through full, off, and a three-line preview. Alt+C cycles injected context cards (instructions, skills, agent messages, session references) separately. `/details` opens a selector or sets these states directly; `/quiet` hides all three and `/quiet off` restores the previous view. Startup defaults are `toolCardVisibility: collapsed`, `reasoningFold: full`, and `contextVisibility: collapsed`.
+- **Full tool output on demand.** `/cards` or Ctrl+T opens a read-only browser for every tool card, even when inline cards are hidden. Tool cards show terminal, diff, or generic output according to the tool's render intent.
+- **Sessions and child agents.** `/resume` searches resumable sessions. Submitted prompts remain available across processes under `$DSH_HOME`. `/agents` or Ctrl+G opens a popup showing direct child agents; Enter opens a read-only child transcript. Esc returns to the popup, then to the main view. Child views inherit the main detail settings when opened and can then change their own tool, reasoning, and context visibility with Alt+T/R/C. Input remains with the main agent.
+- **Models and permissions.** `/model` selects a provider/model and reasoning effort without forking the session. The current permission preset is visible; Shift+Tab cycles named presets through the Harness `/permission` command. A custom policy is changed with `/permission <name>` instead.
+- **Input and decisions.** `@file` path completion, `@session` references, `/skill:<name>` invocation, approval and user-question dialogs, and a scrollable plan-review panel for questions that advertise plan-review intent. An OSC 9 desktop notification fires when a new question becomes actionable; `notifications: false` disables it.
+- **At-a-glance state.** A pinned dashboard shows latest-step timing, input/output tokens, cache hit rate, token throughput, context use, working directory, branch, session ID, and model. A todo panel, session title, and phase-aware prompt indicator show live progress. Provider and cost rows appear only when another plugin supplies them.
 
-- Streaming model output and reasoning, rendered as Markdown
-- Reasoning display: Alt+R cycles full → off → three content rows plus an omission cue; `/details reasoning off|preview|full` selects a state directly. Set `reasoningFold` in the TUI config for the startup state (`showReasoning` remains a legacy alias).
-- Tool-call cards with terminal / diff / generic render intents; Alt+T cycles collapsed → expanded → hidden
-- Injected context cards (instructions, skills, agent messages, session references): Alt+C cycles collapsed → expanded → hidden independently of tool cards; `/details context hidden|collapsed|expanded` selects a state directly. Set `contextVisibility` in the TUI config for the startup state.
-- `/quiet` hides cards, reasoning, and injected context for this session; `/quiet off` restores the prior detail settings.
-- `/cards` or Ctrl+T opens a read-only browser for every tool card's full output, even when cards are hidden. Use ←/→ to switch cards, ↑/↓ or PgUp/PgDn to scroll, and Esc/q to close.
-- `/agents` or Ctrl+G opens the child-agent picker. Enter shows a read-only child transcript; Alt+T, Alt+R, and Alt+C adjust that child view, and Esc returns to the picker. Child views initially inherit the main transcript settings when the picker opens.
-- Approval and `ask_user_question` dialogs, plan-mode review included
-- `@file` path autocomplete and `@session` reference cards
-- Slash commands: `/model` (with reasoning-effort selection), `/resume`, `/compact`, `/details`, `/quiet`, `/cards`, `/help`, and every command other plugins register
-- Standing todo panel, token usage and context-pressure status line, session titles
-- Configurable theme; truecolor detected from `COLORTERM`
-- In-place `/model` switching (mutates the selection ref — the same session continues, no fork/reseed)
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Alt+T / Alt+R / Alt+C | Cycle tool cards / reasoning / injected context |
+| Ctrl+T or `/cards` | Browse full tool outputs; ←/→ changes cards, ↑/↓ or PgUp/PgDn scrolls, Esc closes |
+| Ctrl+G or `/agents` | Open the child-agent popup; ↑/↓ selects, Enter views, Esc goes back |
+| Shift+Tab | Cycle named permission presets; in the model picker, cycle reasoning effort |
+| PageUp / PageDown, mouse wheel | Scroll the transcript; Home/End remain editor keys |
+| Esc / Ctrl+C / Ctrl+D | Cancel a running turn / cancel or clear or exit / exit when idle |
+
+Shortcut actions can be remapped with the TUI `keys` setting; invalid or conflicting maps are rejected as a whole. `/help` shows the active commands and default shortcuts. The fork also provides `/status` (session diagnostics, system prompt, tools), `/clear` (view only), `/palette`, `/exit`, `/quit`, and experimental `/reload`. Harness commands such as `/compact` and `/permission` remain available through the host bundle and other installed plugins.
 
 ## Install
 
-Requires Node `^22.19 || >=24` and the `dsh` CLI (`npm i -g @deepseek-ai/dsh`).
-
-This fork is consumed **from GitHub** (it is not published to the npm `@dsh-tui` scope). It ships a prebuilt
-`lib/` and has no `prepare` script, so installs use the committed build directly — no build step, no
-`allowBuilds` prompt:
+Requires Node `^22.19 || >=24`. The tested Harness CLI line is `0.1.5-rc.2`.
 
 ```sh
-# a release tag (recommended) or an exact commit — both are immutable
-dsh plugin --profile tui add github:brianynwu/dsh-tui#v0.1.3-revive.1
-dsh --profile tui                                      # start a session in the current directory
-dsh --profile tui --resume <session-id>                # resume a persisted session
+npm install -g @deepseek-ai/dsh@0.1.5-rc.2
+dsh plugin --profile tui add @brianynwu/dsh-tui@0.2.0
+dsh --profile tui
 ```
 
-Set `DEEPSEEK_API_KEY` in your environment (or a `.env` in the launch directory or `$DSH_HOME`).
+You can also install the same release from GitHub:
 
-## Local / self-hosted DeepSeek endpoints
+```sh
+dsh plugin --profile tui add github:brianynwu/dsh-tui#v0.2.0
+```
 
-No code changes needed — pick one:
+The package includes built `lib/` and its Cordis patch; installation does not compile TypeScript. The patch composes over `dsh-base` and does not hardcode a model route. Configure a provider and credentials in the host deployment before a model turn. For the official DeepSeek adapter, supply `DEEPSEEK_API_KEY` through the host credential setup, launch environment, or a `.env` file in the working directory or `$DSH_HOME`. `DEEPSEEK_BASE_URL` can point that adapter at a compatible endpoint; alternatively, set `llm-deepseek.baseURL` in `$DSH_HOME/settings.yaml`. For other OpenAI-compatible gateways, configure a `llm-pi-ai` route in the host profile and select its model.
 
-1. **Environment**: `DEEPSEEK_BASE_URL=http://localhost:8000/v1` alongside `DEEPSEEK_API_KEY`.
-2. **Settings (hot-reloaded)**: `$DSH_HOME/settings.yaml`
+`/resume` lists this workspace's sessions; `dsh --profile tui --resume <session-id>` opens one directly. On exit, the default hint prints that command. A launcher with a different session root can set `DSH_TUI_RESUME_HINT`; `{session}` expands to the session ID, and an empty value suppresses the hint.
 
-   ```yaml
-   llm-deepseek:
-     baseURL: http://localhost:8000/v1
-   ```
+## Configuration and compatibility
 
-3. **OpenAI-compatible gateways** (vLLM, SGLang, …): declare an `llm-pi-ai` route in your profile patch (`$DSH_HOME/profiles/tui/cordis.patch.yml`) and point the default model at it — see the dsh providers guide.
+The TUI settings are defined in [`src/config.ts`](src/config.ts): shortcut overrides, notification toggle, transcript detail defaults, dialog sizes, file completion limits, and prompt/color settings. `theme.truecolor` auto-detects from `COLORTERM` unless explicitly set. `showReasoning` remains a legacy alias when `reasoningFold` is absent. A Cordis patch replaces a row's whole `config` block, so retain the other `tui` fields when overriding that row.
 
-## Compatibility
-
-- **Pinned to dsh-core `0.1.1-rc.2`.** `package.json` `overrides` + a committed `package-lock.json` pin the
-  whole `@deepseek-ai/*` base to the exact tested set; a fresh `npm ci` + `npm run build` regenerates `lib/`
-  deterministically (byte-identically). Do not bump dsh-core to `0.1.2` — its `/resume` persistence seam is
-  buggy on the currently-released line.
-- **Vendored `Editor`.** The frameless prompt-gutter `Editor` this TUI needs came from a pnpm-*patched*
-  `@earendil-works/pi-tui@0.80.7` that was never published. It is vendored as `src/vendor/editor.ts` (recovered
-  from this package's own MIT bundle, behavior-preserving), so the fork depends only on pi-tui 0.80.7's
-  published primitives. See `FORK.md` for the full maintenance record — including three pre-existing upstream
-  editor defects (paste-undo metadata, paste-id renumber, autocomplete rejection) carried faithfully and
-  deferred to a dedicated editor-hardening pass.
-- **In-place model swap.** `/model` mutates the model-selection ref (`src/chat/model-command.ts`), so a switch
-  continues the same session — no child-session fork (unlike the pi-Ink community port). This is what makes it
-  compose with dsh-core / automated orchestration.
+This release is built and tested with `@deepseek-ai/dsh-*` `0.1.5-rc.2` and `@earendil-works/pi-tui` `0.85.1`. The frameless prompt editor is vendored in `src/vendor/editor.ts`; its earlier paste/undo/autocomplete defects were fixed in this fork. The host's dsh packages are still on an rc line. The TUI does not provide a local `!` shell mode or session rewind. See [`FORK.md`](FORK.md) for the maintenance history.
 
 ## Development
 
 ```sh
-npm ci          # exact base from the committed lockfile (do NOT use --legacy-peer-deps: it omits the peers)
-npm run build   # cleans lib/, tsc declarations -> lib/types, tsdown runtime bundle -> lib/
+npm ci
 npm run typecheck
-npm test        # vitest — renderer regression tests (test/editor.test.ts)
+npm test
+npm run build
 ```
 
-The build is deterministic: a clean clone + `npm ci` + `npm run build` reproduces the committed `lib/` exactly.
-
-## Status and known limitations
-
-- Tracks the pre-release `@deepseek-ai/dsh` rc line (pinned at `0.1.1-rc.2`); expect churn until upstream
-  stabilizes.
-- A real model turn requires a reachable DeepSeek-compatible endpoint; everything up to the request
-  (composition, rendering, approvals, resume) works keyless.
-- Known editor-behavior debt is tracked in `FORK.md` (interactive paste/undo/autocomplete paths).
+`npm run build` regenerates the committed `lib/` bundle and declarations from `src/`. Use the committed lockfile and do not use `--legacy-peer-deps`, which omits required peer packages.
 
 ## Provenance and license
 
-MIT. The TUI implementation was recovered from the DeepSeek Harness repository history (`packages/ui/tui`, removed upstream) and ported to the published rc API; upstream copyright is preserved in [LICENSE](LICENSE). This fork adds the rebuildable-compatibility work described above; see `FORK.md`.
+MIT. The original TUI came from DeepSeek Harness repository history (`packages/ui/tui`, later removed upstream). This fork retains the upstream copyright in [LICENSE](LICENSE) and adds the maintained features described above.

@@ -2,85 +2,68 @@
 
 [English](README.md) | 中文
 
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 智能体的交互式终端（TUI）入口——在终端里获得 Claude Code / Codex 同款的对话体验，以树外（out-of-tree）dsh 插件 bundle 的形式安装。基于 [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui) 构建。
-
-它组合在官方 `@deepseek-ai/dsh-base` bundle 之上，与官方 web 界面共享同一套插件生态——shell 与文件系统工具、技能、子代理、工作流、沙箱审批。dsh 插件生态**不 fork**；唯一 vendored 的代码是终端 `Editor` 组件（见[兼容性](#兼容性)）。
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 智能体的持续维护版终端界面。它作为树外插件运行在官方 `@deepseek-ai/dsh-base` bundle 之上，使用 [pi-tui](https://www.npmjs.com/package/@earendil-works/pi-tui) 渲染。工具、技能、子代理、工作流、审批和会话仍由宿主 Harness 插件体系提供。通过 `/model` 更换模型时，**当前会话会继续**。
 
 ## 功能
 
-- 模型输出与思考过程的流式 Markdown 渲染
-- 思考过程显示：Alt+R 依次切换完整 → 隐藏 → 三行内容预览（另有省略提示）；`/details reasoning off|preview|full` 可直接选择。TUI 配置中的 `reasoningFold` 指定启动状态（`showReasoning` 保留为旧版别名）。
-- 工具调用卡片（terminal / diff / generic 三种渲染意图）；Alt+T 三档切换：预览 → 展开 → 隐藏
-- 注入的上下文卡片（指令、技能、智能体消息、会话引用）可用 Alt+C 独立切换：预览 → 展开 → 隐藏；`/details context hidden|collapsed|expanded` 可直接选择。TUI 配置中的 `contextVisibility` 指定启动状态。
-- `/quiet` 在当前会话隐藏工具卡片、思考过程和注入的上下文；`/quiet off` 恢复之前的显示设置。
-- `/cards` 或 Ctrl+T 可只读浏览所有工具卡片的完整输出，即使卡片已隐藏。用 ←/→ 切换卡片，↑/↓ 或 PgUp/PgDn 滚动，Esc/q 关闭。
-- `/agents` 或 Ctrl+G 打开子代理选择窗格。Enter 查看只读子代理记录；Alt+T、Alt+R 和 Alt+C 调整该子代理视图，Esc 返回选择窗格。打开选择窗格时，子代理视图继承主记录的显示设置。
-- 工具审批与 `ask_user_question` 对话框，含 plan 模式评审
-- `@文件` 路径自动补全与 `@session` 会话引用卡片
-- 斜杠命令：`/model`（含推理力度选择）、`/resume`、`/compact`、`/details`、`/quiet`、`/cards`、`/help`，以及其他插件注册的全部命令
-- 常驻 todo 面板、token 用量与上下文压力状态栏、会话标题
-- 可配置主题；从 `COLORTERM` 自动检测真彩色
-- `/model` 原地切换（改写 selection ref——同一会话继续，不 fork、不 reseed）
+- **易读的实时记录。** 全屏视口流式呈现 Markdown、思考过程和 LaTeX。可用 PageUp/PageDown 或鼠标滚轮滚动、搜索记录，并用鼠标选取文本。编辑器、问题对话框和指标固定在滚动区域下方。
+- **独立的详细程度控制。** Alt+T 在折叠、展开、隐藏三种工具卡片状态间切换；Alt+R 在完整、隐藏、三行预览三种思考过程状态间切换；Alt+C 独立控制注入的上下文卡片（指令、技能、智能体消息、会话引用）。`/details` 可打开选择窗格或直接指定状态；`/quiet` 隐藏这三类内容，`/quiet off` 恢复先前的显示方式。启动默认值分别为 `toolCardVisibility: collapsed`、`reasoningFold: full`、`contextVisibility: collapsed`。
+- **随时查看完整工具输出。** `/cards` 或 Ctrl+T 可只读浏览所有工具卡片，即使行内卡片已隐藏。工具卡片按工具的渲染意图显示终端、差异或通用输出。
+- **会话与子代理。** `/resume` 搜索可恢复的会话；已提交的提示词保存在 `$DSH_HOME` 下，可跨进程调取。`/agents` 或 Ctrl+G 打开直属子代理弹窗；按 Enter 查看只读子代理记录。按 Esc 先返回弹窗，再返回主视图。子视图打开时继承主视图的详细程度，之后可用 Alt+T/R/C 独立调整工具、思考和上下文显示。输入仍归主智能体。
+- **模型与权限。** `/model` 选择提供方、模型和推理力度，不派生新会话。当前权限预设始终可见；Shift+Tab 通过 Harness 的 `/permission` 命令轮换具名预设。自定义权限策略需用 `/permission <name>` 更改。
+- **输入与决策。** 支持 `@file` 路径补全、`@session` 会话引用、`/skill:<name>` 调用、审批与用户问题对话框，以及针对明确标记为计划评审的问题的可滚动评审面板。新问题需要答复时可发出 OSC 9 桌面通知；设置 `notifications: false` 可关闭。
+- **一眼查看运行状态。** 固定仪表板显示最近一步的耗时、输入/输出 token、缓存命中率、token 吞吐量、上下文用量、工作目录、分支、会话 ID 和模型。todo 面板、会话标题和随阶段变化的提示符展示进度。提供方与费用行仅在其他插件提供数据时出现。
+
+## 操作
+
+| 输入 | 功能 |
+| --- | --- |
+| Alt+T / Alt+R / Alt+C | 轮换工具卡片 / 思考过程 / 注入的上下文 |
+| Ctrl+T 或 `/cards` | 浏览完整工具输出；←/→ 切换卡片，↑/↓ 或 PgUp/PgDn 滚动，Esc 关闭 |
+| Ctrl+G 或 `/agents` | 打开子代理弹窗；↑/↓ 选择，Enter 查看，Esc 返回 |
+| Shift+Tab | 轮换具名权限预设；在模型选择窗格中轮换推理力度 |
+| PageUp / PageDown、鼠标滚轮 | 滚动记录；Home/End 仍由编辑器使用 |
+| Esc / Ctrl+C / Ctrl+D | 取消运行中的回合 / 取消、清空输入或退出 / 空闲时退出 |
+
+可用 TUI 的 `keys` 设置重映射快捷键；无效或冲突的整组映射会被拒绝。`/help` 显示当前命令和默认快捷键。本 fork 还提供 `/status`（会话诊断、系统提示词、工具）、`/clear`（仅清空视图）、`/palette`、`/exit`、`/quit` 和实验性的 `/reload`。`/compact`、`/permission` 等 Harness 命令仍由宿主 bundle 和其他已安装插件提供。
 
 ## 安装
 
-需要 Node `^22.19 || >=24` 和 `dsh` CLI（`npm i -g @deepseek-ai/dsh`）。
-
-本 fork **从 GitHub 安装**（未发布到 npm 的 `@dsh-tui` scope）。它随包提供预构建的 `lib/`，且没有 `prepare`
-脚本，因此安装直接使用已提交的构建产物——无构建步骤，也不会触发 `allowBuilds` 提示：
+需要 Node `^22.19 || >=24`。已验证的 Harness CLI 版本线为 `0.1.5-rc.2`。
 
 ```sh
-# 用发布 tag（推荐）或精确 commit——两者都不可变
-dsh plugin --profile tui add github:brianynwu/dsh-tui#v0.1.3-revive.1
-dsh --profile tui                                      # 在当前目录开启会话
-dsh --profile tui --resume <session-id>                # 恢复历史会话
+npm install -g @deepseek-ai/dsh@0.1.5-rc.2
+dsh plugin --profile tui add @brianynwu/dsh-tui@0.2.0
+dsh --profile tui
 ```
 
-在环境变量（或启动目录 / `$DSH_HOME` 下的 `.env`）里设置 `DEEPSEEK_API_KEY`。
+也可以从 GitHub 安装同一版本：
 
-## 本地 / 自部署 DeepSeek 端点
+```sh
+dsh plugin --profile tui add github:brianynwu/dsh-tui#v0.2.0
+```
 
-零代码配置，三选一：
+包内已附 `lib/` 构建产物和 Cordis 补丁；安装时无需编译 TypeScript。补丁叠加在 `dsh-base` 上，不固定模型路由。模型回合开始前，请在宿主部署中配置提供方与凭据。使用官方 DeepSeek 适配器时，可通过宿主凭据设置、启动环境，或工作目录及 `$DSH_HOME` 下的 `.env` 文件提供 `DEEPSEEK_API_KEY`。`DEEPSEEK_BASE_URL` 可将该适配器指向兼容端点；也可在 `$DSH_HOME/settings.yaml` 中设置 `llm-deepseek.baseURL`。其他 OpenAI 兼容网关可在宿主 profile 中配置 `llm-pi-ai` 路由并选择其模型。
 
-1. **环境变量**：`DEEPSEEK_BASE_URL=http://localhost:8000/v1` 搭配 `DEEPSEEK_API_KEY`。
-2. **设置文件（热加载）**：`$DSH_HOME/settings.yaml`
+`/resume` 列出当前工作区的会话；`dsh --profile tui --resume <session-id>` 可直接恢复。退出时默认提示会打印该命令。如果启动器使用不同的会话目录，可设置 `DSH_TUI_RESUME_HINT`；`{session}` 会展开为会话 ID，空值可关闭提示。
 
-   ```yaml
-   llm-deepseek:
-     baseURL: http://localhost:8000/v1
-   ```
+## 配置与兼容性
 
-3. **OpenAI 兼容网关**（vLLM、SGLang 等）：在 profile 补丁（`$DSH_HOME/profiles/tui/cordis.patch.yml`）里声明一个 `llm-pi-ai` 路由并把默认模型指过去——参见 dsh 的 providers 指南。
+TUI 设置定义在 [`src/config.ts`](src/config.ts)：快捷键、通知开关、记录详细程度的启动值、对话框大小、文件补全上限，以及提示符和颜色设置。`theme.truecolor` 默认通过 `COLORTERM` 检测，也可显式指定。未设置 `reasoningFold` 时，旧版别名 `showReasoning` 仍有效。Cordis 补丁会替换目标行的整个 `config` 块；覆盖 `tui` 行时应保留其他字段。
 
-## 兼容性
-
-- **钉在 dsh-core `0.1.1-rc.2`。** `package.json` 的 `overrides` 加上已提交的 `package-lock.json` 把整套
-  `@deepseek-ai/*` base 钉到验证过的精确版本；全新 `npm ci` + `npm run build` 可确定性地（逐字节一致）重建
-  `lib/`。不要升到 dsh-core `0.1.2`——其 `/resume` 持久化 seam 在当前发布线上有 bug。
-- **Vendored `Editor`。** 本 TUI 需要的无边框 prompt-gutter `Editor` 来自一个从未发布的、被 pnpm 打过补丁的
-  `@earendil-works/pi-tui@0.80.7`。它以 `src/vendor/editor.ts` vendored（从本包自己的 MIT bundle 恢复、保持行为
-  一致），因此 fork 只依赖 pi-tui 0.80.7 已发布的原语。完整维护记录见 `FORK.md`——包括三个忠实保留、延后到专门
-  editor 加固轮次处理的上游既有缺陷（paste-undo 元数据、paste-id 重编号、autocomplete 拒绝）。
-- **原地模型切换。** `/model` 改写模型 selection ref（`src/chat/model-command.ts`），切换后同一会话继续——不 fork
-  子会话（与 pi-Ink 社区移植版不同），因而能与 dsh-core / 自动化编排组合。
+此版本使用 `@deepseek-ai/dsh-*` `0.1.5-rc.2` 和 `@earendil-works/pi-tui` `0.85.1` 构建及测试。无边框提示词编辑器 vendored 于 `src/vendor/editor.ts`；先前的粘贴、撤销和自动补全缺陷已在本 fork 中修复。宿主 dsh 包仍处于 rc 版本线。TUI 尚未提供本地 `!` shell 模式或会话回退。维护历史见 [`FORK.md`](FORK.md)。
 
 ## 开发
 
 ```sh
-npm ci          # 从已提交 lockfile 取精确 base（不要用 --legacy-peer-deps：它会漏掉 peers）
-npm run build   # 清空 lib/，tsc 类型声明 -> lib/types，tsdown 运行时打包 -> lib/
+npm ci
 npm run typecheck
-npm test        # vitest——渲染器回归测试（test/editor.test.ts）
+npm test
+npm run build
 ```
 
-构建是确定性的：干净克隆 + `npm ci` + `npm run build` 逐字节重现已提交的 `lib/`。
-
-## 状态与已知限制
-
-- 跟踪 pre-release 的 `@deepseek-ai/dsh` rc 线（钉在 `0.1.1-rc.2`）；上游稳定前会有变动。
-- 真实模型回合需要可达的 DeepSeek 兼容端点；请求之前的一切（组合、渲染、审批、resume）无需 key 即可工作。
-- 已知的 editor 行为债记录在 `FORK.md`（交互式 paste/undo/autocomplete 路径）。
+`npm run build` 根据 `src/` 重新生成已提交的 `lib/` bundle 和类型声明。请使用已提交的 lockfile，不要使用 `--legacy-peer-deps`，否则会漏装必需的 peer 包。
 
 ## 来源与许可
 
-MIT。TUI 实现恢复自 DeepSeek Harness 仓库历史（`packages/ui/tui`，上游已移除），并移植到已发布的 rc API；上游版权声明保留在 [LICENSE](LICENSE) 中。本 fork 增加了上述 rebuildable-compatibility 工作；详见 `FORK.md`。
+MIT。原始 TUI 来自 DeepSeek Harness 仓库历史中的 `packages/ui/tui`（后来被上游移除）。本 fork 在 [LICENSE](LICENSE) 中保留上游版权声明，并增加上述持续维护的功能。
