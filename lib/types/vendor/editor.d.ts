@@ -185,6 +185,8 @@ export declare class Editor implements Component, Focusable {
     undoStack: UndoStack;
     onSubmit?: (value: string) => void;
     onChange?: (value: string) => void;
+    /** dsh-tui supplies a fresh history snapshot before a new Up sequence. */
+    onHistoryNavigationStart?: () => readonly string[] | undefined;
     disableSubmit: boolean;
     constructor(tui: TUI, theme: EditorTheme, options?: EditorOptions);
     setPrompt(prompt: EditorPrompt): void;
@@ -202,6 +204,8 @@ export declare class Editor implements Component, Focusable {
      * Called after successful submission.
      */
     addToHistory(text: string): void;
+    /** Replace the idle history snapshot without changing the unsent draft. */
+    replaceHistory(entries: readonly string[]): void;
     isEditorEmpty(): boolean;
     isOnFirstVisualLine(): boolean;
     isOnLastVisualLine(): boolean;

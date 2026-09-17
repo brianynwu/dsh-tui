@@ -107,6 +107,7 @@ import {
 import { applyDetailsArguments, createQuietCommand, nextReasoningFold } from './chat/details.ts'
 import { TuiKeymap } from './chat/keymap.ts'
 import { createPermissionModeController, type PermissionModeController } from './chat/permission-mode.ts'
+import { HistoryStore } from './chat/history-store.ts'
 import { CardsOverlay, cardsOverlayWidth } from './components/cards-overlay.ts'
 import {
   ContextCardComponent,
@@ -345,6 +346,10 @@ export function createTuiChat(
     },
   })
   editor.hintPrefix = initialInputPrompt
+  const historyStore = new HistoryStore()
+  let replayHistory: string[] = []
+  const unsavedHistory: string[] = []
+  let historyWarningShown = false
   const todo = new TodoComponent(palette)
   const compactionStatusLine = new Text('', 0, 0)
   let reasoningFold: ReasoningFold = resolved.reasoningFold
@@ -635,6 +640,36 @@ export function createTuiChat(
     chat.addChild(new Spacer(1))
     chat.addChild(new Text(color(displayText(message)), 0, 0))
     requestRender()
+  }
+
+  const historyWarning = (): void => {
+    if (historyWarningShown) return
+    historyWarningShown = true
+    appendNotice('Prompt history storage unavailable; in-memory recall still works.', 'warning')
+  }
+  const refreshHistory = (): readonly string[] | undefined => {
+    try {
+      const persisted = historyStore.load()
+      const persistedTexts = new Set(persisted)
+      return [
+        ...unsavedHistory.filter(text => !persistedTexts.has(text)),
+        ...persisted,
+        ...replayHistory.filter(text => !persistedTexts.has(text)),
+      ].slice(0, 500)
+    } catch {
+      historyWarning()
+      return undefined // keep the editor's current in-memory snapshot
+    }
+  }
+  editor.onHistoryNavigationStart = refreshHistory
+  const recordHistory = (text: string): void => {
+    editor.addToHistory(text)
+    try {
+      if (!historyStore.append(text)) unsavedHistory.unshift(text)
+    } catch {
+      unsavedHistory.unshift(text)
+      historyWarning()
+    }
   }
 
   const extensionTheme: TuiTheme = Object.freeze({
@@ -1799,7 +1834,7 @@ export function createTuiChat(
     // `/skill:<name>` carries a colon, which the command registry's name
     // grammar rejects, so it is intercepted before generic command routing.
     if (text.startsWith(SKILL_COMMAND_PREFIX)) {
-      editor.addToHistory(text)
+      recordHistory(value)
       editor.setText('')
       const { name: skillName, instructions } = parseSkillCommand(text)
       if (skillName === '') appendNotice('Usage: /skill:<name> [instructions]', 'warning')
@@ -1807,7 +1842,7 @@ export function createTuiChat(
       return
     }
     if (value.startsWith('/')) {
-      editor.addToHistory(text)
+      recordHistory(value)
       editor.setText('')
       runCommand(value)
       return
@@ -1821,7 +1856,7 @@ export function createTuiChat(
       return
     }
     if (parsed.references.length === 0) {
-      editor.addToHistory(text)
+      recordHistory(value)
       editor.setText('')
       dispatchMessage([{ type: 'text', text: parsed.text }])
       return
@@ -1842,7 +1877,7 @@ export function createTuiChat(
       controller.signal,
     ).then((prepared) => {
       if (disposed) return
-      editor.addToHistory(text)
+      recordHistory(value)
       if (editor.getText() === value) editor.setText('')
       // The snapshot travels with the prompt so a blocking admission hook
       // discards them together — see dispatchMessage's attached-context path.
@@ -2026,6 +2061,9 @@ export function createTuiChat(
   }
 
   rebuildTranscript(true)
+  replayHistory = [...editor.history]
+  const persistedHistory = refreshHistory()
+  if (persistedHistory !== undefined && persistedHistory.length > 0) editor.replaceHistory(persistedHistory)
   const restoredGoal = foldGoal(agent.session.snapshotEvents()).goal
   /* v8 ignore next -- goal replay coverage lives with the goal seam; the TUI only formats its startup notice. */
   if (restoredGoal !== undefined && restoredGoal.phase !== 'complete') {
