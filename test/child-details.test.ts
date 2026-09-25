@@ -43,4 +43,19 @@ describe('child transcript detail modes', () => {
     expect(rows(view)).toContain('Context · agent-instructions')
     expect(rows(view)).toContain('Reasoning')
   })
+
+  it('renders a developer notice (tool-registry change) as a context card', () => {
+    const view = new ChildTranscript(sessionId, 'Tools', createPalette(false), resolveTuiConfig(undefined),
+      { tools: 'hidden', reasoning: 'off', context: 'expanded' })
+    view.replay([event(0, 'developer/message', {
+      turn: 0, step: 0,
+      message: {
+        role: 'developer', source: { kind: 'tool-registry' },
+        content: [{ type: 'tool-addition', toolName: 'web_fetch' }, { type: 'tool-removal', toolName: 'bash' }],
+      },
+    })])
+    expect(rows(view)).toContain('Context · tool-registry')
+    expect(rows(view)).toContain('tool added: web_fetch')
+    expect(rows(view)).toContain('tool removed: bash')
+  })
 })

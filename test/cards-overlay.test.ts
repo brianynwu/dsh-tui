@@ -16,7 +16,7 @@ function card(name: string, maxOutputLines = 2, definition?: ToolDefinition): To
 
 function result(card: ToolCardComponent, text: string): void {
   card.updateResult({
-    message: { content: [{ content: [{ type: 'text', text }], isError: false }] },
+    message: { role: 'tool', content: [{ type: 'text', text }], isError: false },
   } as Parameters<ToolCardComponent['updateResult']>[0])
 }
 

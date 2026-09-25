@@ -29,10 +29,10 @@ Shortcut actions can be remapped with the TUI `keys` setting; invalid or conflic
 
 ## Install
 
-Requires Node `^22.19 || >=24`. The tested Harness CLI line is `0.1.5-rc.2`.
+Requires Node `^22.19 || >=24`. The tested Harness CLI line is `0.1.7-rc.2`.
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.5-rc.2
+npm install -g @deepseek-ai/dsh@0.1.7-rc.2
 dsh plugin --profile tui add @brianynwu/dsh-tui@0.2.0
 dsh --profile tui
 ```
@@ -51,7 +51,7 @@ The package includes built `lib/` and its Cordis patch; installation does not co
 
 The TUI settings are defined in [`src/config.ts`](src/config.ts): shortcut overrides, notification toggle, transcript detail defaults, dialog sizes, file completion limits, and prompt/color settings. `theme.truecolor` auto-detects from `COLORTERM` unless explicitly set. `showReasoning` remains a legacy alias when `reasoningFold` is absent. A Cordis patch replaces a row's whole `config` block, so retain the other `tui` fields when overriding that row.
 
-This release is built and tested with `@deepseek-ai/dsh-*` `0.1.5-rc.2` and `@earendil-works/pi-tui` `0.85.1`. The frameless prompt editor is vendored in `src/vendor/editor.ts`; its earlier paste/undo/autocomplete defects were fixed in this fork. The host's dsh packages are still on an rc line. The TUI does not provide a local `!` shell mode or session rewind. See [`FORK.md`](FORK.md) for the maintenance history.
+This release is built and tested with `@deepseek-ai/dsh-*` `0.1.7-rc.2` and `@earendil-works/pi-tui` `0.86.1`. The frameless prompt editor is vendored in `src/vendor/editor.ts`; its earlier paste/undo/autocomplete defects were fixed in this fork. The host's dsh packages are still on an rc line. The TUI does not provide a local `!` shell mode or session rewind. See [`FORK.md`](FORK.md) for the maintenance history.
 
 ## Development
 

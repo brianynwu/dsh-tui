@@ -521,10 +521,9 @@ export class ToolCardComponent extends CachedCardComponent {
   updateResult(event: Extract<SessionEvent, { type: 'tool/result' }>['data']): void {
     this.diffBodyCache = undefined
     this.dropLines()
-    const result = event.message.content[0]
     this.result = {
-      content: [...result.content],
-      isError: result.isError === true,
+      content: [...event.message.content],
+      isError: event.message.isError === true,
       ...event.meta !== undefined ? { meta: event.meta } : {},
     }
     if (this.parsed.valid && this.definition?.presentResult) {

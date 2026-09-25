@@ -3,17 +3,31 @@ import { Container, type Component } from '@earendil-works/pi-tui';
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent, AgentStatus, AssistantStreamFrame } from '@deepseek-ai/dsh-agent';
 import { type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session';
-import type { SubagentListEntry } from '@deepseek-ai/dsh-subagent';
+import type { SubagentCatalogEntry, SubagentListEntry } from '@deepseek-ai/dsh-subagent';
 import { type Palette } from '../components/theme.ts';
 import type { ResolvedTuiConfig } from '../config.ts';
 import type { TranscriptView } from './details.ts';
 export type SubagentOriginType = 'standard' | 'fork' | 'unknown';
-export type SubagentRow = SubagentListEntry & {
+/** One durable direct child, or a diagnostic for a catalog row the picker cannot open. */
+export type SubagentEntry = {
+    readonly kind: 'child';
+    readonly id: SessionId;
+    readonly mode: 'one-shot' | 'continuable';
+    readonly label?: string;
+} | Extract<SubagentListEntry, {
+    kind: 'diagnostic';
+}>;
+export type SubagentRow = SubagentEntry & {
     readonly execution?: AgentStatus;
     readonly originType?: SubagentOriginType;
 };
+/**
+ * Direct-child rows from the parent's durable catalog (`listChildren` returns raw catalog entries since
+ * 0.1.7). An unknown mode becomes an `unsupported` diagnostic, as upstream's `listDescendants` maps it.
+ */
+export declare function catalogEntries(catalog: readonly SubagentCatalogEntry[]): SubagentEntry[];
 /** Durable listing is authoritative for lineage; runtime ownership only qualifies active status. */
-export declare function projectSubagents(entries: readonly SubagentListEntry[], ctx: Context, main: Agent): SubagentRow[];
+export declare function projectSubagents(entries: readonly SubagentEntry[], ctx: Context, main: Agent): SubagentRow[];
 /** A separate component tree; its events never pass through the main transcript reducer. */
 export declare class ChildTranscript extends Container {
     readonly childId: SessionId;

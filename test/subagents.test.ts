@@ -3,8 +3,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
-import type { SubagentListEntry } from '@deepseek-ai/dsh-subagent'
-import { createSubagentSwitcher, ChildTranscript, projectSubagents, type SubagentRow } from '../src/chat/subagents.ts'
+import type { SubagentCatalogEntry, SubagentListEntry } from '@deepseek-ai/dsh-subagent'
+import {
+  catalogEntries, createSubagentSwitcher, ChildTranscript, projectSubagents, type SubagentEntry, type SubagentRow,
+} from '../src/chat/subagents.ts'
 import { SubagentPicker } from '../src/components/subagent-picker.ts'
 import { ChildViewKeys } from '../src/components/child-view-keys.ts'
 import { createPalette } from '../src/components/theme.ts'
@@ -15,7 +17,9 @@ const mainId = SessionId('main')
 const childId = SessionId('child-1')
 const main = { id: mainId, session: { id: mainId }, status: 'idle' } as Agent
 const child = { id: childId, status: 'running' } as Agent
-const row: SubagentListEntry = { kind: 'child', id: childId, mode: 'one-shot', activity: 'running', hasChildren: false, label: 'research' }
+const row: SubagentEntry = { kind: 'child', id: childId, mode: 'one-shot', label: 'research' }
+/** The raw parent-catalog row `listChildren` returns since 0.1.7. */
+const entry: SubagentCatalogEntry = { id: childId, createdAt: 1, mode: 'one-shot', label: 'research' }
 const palette = createPalette(false)
 const observation = (id: SessionId, events: readonly SessionEvent[] = [], isSeeded = false,
   parentSession: SessionId = mainId, origin: 'subagent' | 'other' = 'subagent'): SessionObservation => ({
@@ -33,6 +37,18 @@ describe('direct-child projection and picker', () => {
     expect(projectSubagents([row, diagnostic], ctx, main)).toEqual([{ ...row, execution: 'running' }, diagnostic])
     const unowned = { agents: { get: () => child, isOwnedBy: () => false } } as unknown as Context
     expect(projectSubagents([row], unowned, main)).toEqual([row])
+  })
+
+  it('maps raw catalog entries to child rows and an unknown mode to an unsupported diagnostic', () => {
+    const unknownId = SessionId('unknown-mode')
+    const continuable: SubagentCatalogEntry = { id: SessionId('cont'), createdAt: 2, mode: 'continuable', label: 'chat' }
+    const unlabelled: SubagentCatalogEntry = { id: SessionId('bare'), createdAt: 3, mode: 'one-shot' }
+    expect(catalogEntries([entry, continuable, unlabelled, { id: unknownId, createdAt: 4, mode: 'unknown' }])).toEqual([
+      row,
+      { kind: 'child', id: SessionId('cont'), mode: 'continuable', label: 'chat' },
+      { kind: 'child', id: SessionId('bare'), mode: 'one-shot' },
+      { kind: 'diagnostic', id: unknownId, reason: 'unsupported' },
+    ])
   })
 
   it('shows IDs, types, titles and statuses in a vertically scrolling picker', () => {
@@ -108,7 +124,7 @@ describe('read-only child transcript and provenance', () => {
       observeSession.mock.calls.length === 1 ? Promise.resolve(observation(childId)) : deferred.promise)
     const ctx = {
       agents: { get: () => child, isOwnedBy: () => true },
-      subagents: { listChildren: async () => [row] },
+      subagents: { listChildren: async () => [entry] },
       get: () => ({ observeSession }), on,
     } as unknown as Context
     const views: unknown[] = []
@@ -145,7 +161,7 @@ describe('read-only child transcript and provenance', () => {
     const forkId = SessionId('fork-child')
     const badId = SessionId('wrong-parent')
     const badOriginId = SessionId('wrong-origin')
-    const listed = [row, { ...row, id: forkId }, { ...row, id: badId }, { ...row, id: badOriginId }]
+    const listed = [entry, { ...entry, id: forkId }, { ...entry, id: badId }, { ...entry, id: badOriginId }]
     const observeSession = vi.fn((id: SessionId) => Promise.resolve(
       id === forkId ? observation(id, [], true)
         : id === badId ? observation(id, [], false, SessionId('other'))
@@ -173,7 +189,7 @@ describe('read-only child transcript and provenance', () => {
 
   it('ignores stale header completion after removal and re-addition of the same ID', async () => {
     const delayed = Promise.withResolvers<SessionObservation>()
-    let listed: SubagentListEntry[] = [row]
+    let listed: SubagentCatalogEntry[] = [entry]
     const observeSession = vi.fn().mockImplementation(() =>
       observeSession.mock.calls.length === 1 ? delayed.promise : Promise.resolve(observation(childId, [], true)))
     const ctx = {
@@ -190,7 +206,7 @@ describe('read-only child transcript and provenance', () => {
       expect(observeSession).toHaveBeenCalledTimes(1)
       listed = []
       await switcher.refresh()
-      listed = [row]
+      listed = [entry]
       await switcher.refresh()
       await vi.waitFor(() => expect(switcher.rows[0]).toHaveProperty('originType', 'fork'))
       expect(observeSession).toHaveBeenCalledTimes(2)
@@ -203,7 +219,7 @@ describe('read-only child transcript and provenance', () => {
   it('shows Unknown when a header lacks fork metadata or observation fails', async () => {
     const missingId = SessionId('missing-type')
     const rejectedId = SessionId('unreadable-type')
-    const listed = [{ ...row, id: missingId }, { ...row, id: rejectedId }]
+    const listed = [{ ...entry, id: missingId }, { ...entry, id: rejectedId }]
     const observeSession = vi.fn((id: SessionId) => id === rejectedId
       ? Promise.reject(new Error('unavailable'))
       : Promise.resolve({
@@ -241,7 +257,7 @@ describe('read-only child transcript and provenance', () => {
     const views: unknown[] = []
     const ctx = {
       agents: { get: () => child, isOwnedBy: () => true },
-      subagents: { listChildren: async () => [row] },
+      subagents: { listChildren: async () => [entry] },
       get: () => ({ observeSession }), on: () => () => {},
     } as unknown as Context
     const switcher = createSubagentSwitcher({
@@ -260,7 +276,7 @@ describe('read-only child transcript and provenance', () => {
   })
 
   it('keeps empty catalogs and unavailable transcript service safe', async () => {
-    let listed: SubagentListEntry[] = []
+    let listed: SubagentCatalogEntry[] = []
     const errors: string[] = []
     const views: unknown[] = []
     const ctx = {
@@ -277,7 +293,7 @@ describe('read-only child transcript and provenance', () => {
       await switcher.refresh()
       expect(switcher.rows).toEqual([])
       expect(views).toEqual([])
-      listed = [row]
+      listed = [entry]
       await switcher.refresh()
       expect(switcher.rows[0]).toHaveProperty('originType', 'unknown')
       expect(switcher.select(childId)).toBe(false)

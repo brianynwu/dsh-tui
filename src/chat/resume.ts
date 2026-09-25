@@ -117,7 +117,7 @@ export function createResumeController(deps: ResumeControllerDeps): ResumeContro
       cacheTitle: cache === undefined
         ? undefined
         : (record, log) => {
-            const cached = cache.cachedSnapshot(record.header, log.inheritedEventCount)
+            const cached = cache.cachedSnapshot(record.header, ['title'])
             return cached !== undefined && 'title' in cached.values
               ? cached.values.title
               : cache.coldSnapshot(record.header, log.inheritedEventCount, log.events).values.title

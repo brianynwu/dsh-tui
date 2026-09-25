@@ -7,8 +7,8 @@
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 
 /**
- * Flatten content blocks into a single display string, recursing into
- * tool-result content and naming unknown block types.
+ * Flatten content blocks into a single display string, naming unknown block
+ * types.
  * @param content - Content blocks to flatten.
  * @returns The concatenated display text.
  */
@@ -23,8 +23,11 @@ export function contentText(content: readonly ContentBlock[]): string {
       case 'tool-call':
         parts.push(`${block.name}(${block.arguments})`)
         break
-      case 'tool-result':
-        parts.push(contentText(block.content))
+      case 'tool-addition':
+        parts.push(`tool added: ${block.toolName}\n`)
+        break
+      case 'tool-removal':
+        parts.push(`tool removed: ${block.toolName}\n`)
         break
       default: {
         const rawType = (block as { type?: unknown }).type

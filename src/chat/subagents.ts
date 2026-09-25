@@ -3,7 +3,7 @@ import { Container, Spacer, Text, type Component } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentStatus, AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import { isReplacementSurfaceEvent, type SessionEvent, type SessionHeader, type SessionId } from '@deepseek-ai/dsh-session'
-import type { SubagentListEntry } from '@deepseek-ai/dsh-subagent'
+import type { SubagentCatalogEntry, SubagentListEntry } from '@deepseek-ai/dsh-subagent'
 import { contentText, parseArguments } from '../components/content.ts'
 import { LiveStreamController } from './stream.ts'
 import { StepTimingTracker } from './timing.ts'
@@ -17,13 +17,27 @@ import type { ResolvedTuiConfig } from '../config.ts'
 import type { TranscriptView } from './details.ts'
 
 export type SubagentOriginType = 'standard' | 'fork' | 'unknown'
-export type SubagentRow = SubagentListEntry & {
+/** One durable direct child, or a diagnostic for a catalog row the picker cannot open. */
+export type SubagentEntry =
+  | { readonly kind: 'child'; readonly id: SessionId; readonly mode: 'one-shot' | 'continuable'; readonly label?: string }
+  | Extract<SubagentListEntry, { kind: 'diagnostic' }>
+export type SubagentRow = SubagentEntry & {
   readonly execution?: AgentStatus
   readonly originType?: SubagentOriginType
 }
 
+/**
+ * Direct-child rows from the parent's durable catalog (`listChildren` returns raw catalog entries since
+ * 0.1.7). An unknown mode becomes an `unsupported` diagnostic, as upstream's `listDescendants` maps it.
+ */
+export function catalogEntries(catalog: readonly SubagentCatalogEntry[]): SubagentEntry[] {
+  return catalog.map((entry): SubagentEntry => entry.mode === 'unknown'
+    ? { kind: 'diagnostic', id: entry.id, reason: 'unsupported' }
+    : { kind: 'child', id: entry.id, mode: entry.mode, ...entry.label === undefined ? {} : { label: entry.label } })
+}
+
 /** Durable listing is authoritative for lineage; runtime ownership only qualifies active status. */
-export function projectSubagents(entries: readonly SubagentListEntry[], ctx: Context, main: Agent): SubagentRow[] {
+export function projectSubagents(entries: readonly SubagentEntry[], ctx: Context, main: Agent): SubagentRow[] {
   return entries.map(entry => {
     if (entry.kind !== 'child') return entry
     const live = ctx.agents.get(entry.id)
@@ -113,6 +127,15 @@ export class ChildTranscript extends Container {
           this.contexts.add(card)
           this.addChild(card)
         }
+        break
+      }
+      case 'developer/message': {
+        const text = contentText(event.data.message.content).trim()
+        if (text === '') break
+        const card = new ContextCardComponent(event.data.message.source.kind, text, this.resolved.maxToolOutputLines, this.palette)
+        card.setVisibility(this.detailsState.context)
+        this.contexts.add(card)
+        this.addChild(card)
         break
       }
       case 'step/start':
@@ -235,7 +258,7 @@ export interface SubagentSwitcherDeps {
 /** Subscribe before observing, then merge the snapshot with buffered live events by sequence. */
 export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwitcher {
   const { ctx, main } = deps
-  let entries: readonly SubagentListEntry[] = []
+  let entries: readonly SubagentEntry[] = []
   let rows: SubagentRow[] = []
   let selectedId: SessionId | undefined
   let childDetails: TranscriptView = {
@@ -351,7 +374,7 @@ export function createSubagentSwitcher(deps: SubagentSwitcherDeps): SubagentSwit
     const abort = new AbortController()
     refreshAbort = abort
     try {
-      const listed = await ctx.subagents.listChildren(main.session.id, abort.signal)
+      const listed = catalogEntries(await ctx.subagents.listChildren(main.session.id, abort.signal))
       if (disposed || abort.signal.aborted) return
       entries = listed
       const ids = new Set(listed.filter(row => row.kind === 'child').map(row => row.id))

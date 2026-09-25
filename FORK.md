@@ -14,6 +14,22 @@ session continues). This fork keeps the original's dsh-core-native **in-place** 
 (`src/chat/model-command.ts`: mutates `target.current`, "New steps will use it", no fork/reseed) and is an
 **in-process cordis `--profile` bundle** — so it composes with a launcher's `--patch` overlays natively.
 
+## dsh 0.1.7-rc.2 line (2026-09-24)
+
+Peers move to the 0.1.7-rc.2 lockstep: every `@deepseek-ai/dsh*` peer is exact `0.1.7-rc.2` (dsh's startup
+compatibility check skips a plugin whose dsh peer does not match, so a mismatched host never half-loads it);
+the vendor peers take upstream's own tilde ranges (`cordis ~4.0.4`, `cordis-plugin-loader ~1.0.5`,
+`schemastery ~3.18.4`). devDeps and `overrides` are exact. API adaptations, each proven by `tsc` + tests:
+- **Tool results are `role:'tool'` messages** (session format V4): a `tool/result` carries its content and
+  `isError` on the message itself; the nested `tool-result` content block is gone (`transcript.ts`, `content.ts`).
+- **`listChildren` returns raw catalog entries** (`SubagentCatalogEntry`): `catalogEntries` maps them to the
+  picker's child rows, an unknown mode to an `unsupported` diagnostic, as upstream's `listDescendants` does.
+- **`cachedSnapshot(meta, keys?)`** drops the inherited-count argument; the resume scan asks for `['title']`.
+- **`agent/created` is serial and awaited**; the listener returns `undefined` explicitly.
+- **`developer/message`** (harness notices such as tool-registry additions/removals) renders as a context card
+  in the main and child transcripts, as upstream's chat UI presents it.
+`snapshotEvents` (deprecated upstream, still present) is kept. pi-tui stays at 0.86.1.
+
 ## pi-tui 0.85 capability adoption (2026-09-09) — alt-screen + scroll + mouse + LaTeX
 
 Adopts the 0.85 capabilities the pinned pi-tui 0.85.1 exposes (previously bumped-but-unused). Version →

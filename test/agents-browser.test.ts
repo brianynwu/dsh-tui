@@ -36,7 +36,7 @@ describe('assembled /agents navigation', () => {
     const childId = SessionId('child-1')
     const rows: SubagentRow[] = [{
       kind: 'child', id: childId, mode: 'one-shot', label: 'Read runbook',
-      activity: 'running', hasChildren: false, execution: 'running', originType: 'standard',
+      execution: 'running', originType: 'standard',
     }]
     const switcher = {
       get rows() { return rows },

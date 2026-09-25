@@ -1120,6 +1120,17 @@ export function createTuiChat(
         }
         break
       }
+      case 'developer/message': {
+        // Harness notices (e.g. tool-registry additions/removals) render as context, as upstream's chat UI does.
+        const text = contentText(event.data.message.content).trim()
+        if (text) {
+          const card = new ContextCardComponent(event.data.message.source.kind, text, resolved.maxToolOutputLines, palette)
+          card.setVisibility(contextVisibility)
+          contextCards.add(card)
+          insertAboveCurrentStep(card)
+        }
+        break
+      }
       case 'step/start':
         ensureAssistantStep(event.data)
         break
@@ -2222,7 +2233,7 @@ export function mountTui(ctx: Context, config: Config, runtime: TuiRuntime): voi
     runtime.exit(1)
   }
 
-  const disposeCreated = ctx.on('agent/created', ({ agent }) => start(agent))
+  const disposeCreated = ctx.on('agent/created', ({ agent }) => { start(agent); return undefined })
   const disposeFailure = ctx.on('agent-loop/config-start-failed', ({ sessionId: failedSessionId, error }) => fail(failedSessionId, error))
   const existing = ctx.agents.roots().find(agent => agent.id === sessionId)
   if (existing !== undefined) start(existing)

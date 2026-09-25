@@ -5,8 +5,8 @@
  */
 import type { ContentBlock } from '@deepseek-ai/dsh-llm';
 /**
- * Flatten content blocks into a single display string, recursing into
- * tool-result content and naming unknown block types.
+ * Flatten content blocks into a single display string, naming unknown block
+ * types.
  * @param content - Content blocks to flatten.
  * @returns The concatenated display text.
  */
