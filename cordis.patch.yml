@@ -24,16 +24,6 @@
       - id: main
         cwd: !!js process.cwd()
 
-# Keep the persona to identity and behavior; tool plugins own tool guidance.
-# The loop resolves {{model}} from this agent's configuration.
-- id: system-prompt
-  config:
-    persona: |
-      You are a coding agent powered by the {{model}} model.
-
-      Verify your work by running the code or tests. Keep answers brief and
-      factual.
-
 # Full thinking at max effort on every request. Key and endpoint stay
 # unconfigured here: both resolve per request from the `llm-deepseek:`
 # settings section, the credential store, and $DEEPSEEK_BASE_URL.

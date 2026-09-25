@@ -28,7 +28,9 @@ the vendor peers take upstream's own tilde ranges (`cordis ~4.0.4`, `cordis-plug
 - **`agent/created` is serial and awaited**; the listener returns `undefined` explicitly.
 - **`developer/message`** (harness notices such as tool-registry additions/removals) renders as a context card
   in the main and child transcripts, as upstream's chat UI presents it.
-`snapshotEvents` (deprecated upstream, still present) is kept. pi-tui stays at 0.86.1.
+`snapshotEvents` (deprecated upstream, still present) is kept. pi-tui stays at 0.86.1. The bundle's
+`system-prompt` row is removed: it set `persona`, a key dsh-system-prompt has not had since 0.1.5
+(`personaPrefix`/`personaSuffix`), so it never reached the prompt; removing it keeps the effective prompt unchanged.
 
 ## pi-tui 0.85 capability adoption (2026-09-09) — alt-screen + scroll + mouse + LaTeX
 
