@@ -23,7 +23,8 @@ export type SubagentRow = SubagentEntry & {
 };
 /**
  * Direct-child rows from the parent's durable catalog (`listChildren` returns raw catalog entries since
- * 0.1.7). An unknown mode becomes an `unsupported` diagnostic, as upstream's `listDescendants` maps it.
+ * 0.1.7). An unknown mode becomes an `unsupported` diagnostic, as upstream's `listDescendants` maps it; an
+ * `external` row (0.2: no local child session to open) is shown the same way.
  */
 export declare function catalogEntries(catalog: readonly SubagentCatalogEntry[]): SubagentEntry[];
 /** Durable listing is authoritative for lineage; runtime ownership only qualifies active status. */

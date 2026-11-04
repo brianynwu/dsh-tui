@@ -51,6 +51,17 @@ describe('direct-child projection and picker', () => {
     ])
   })
 
+  it('maps an external catalog entry (0.2: no local child session) to an unsupported diagnostic', () => {
+    const externalId = SessionId('external-run')
+    const external: SubagentCatalogEntry = { id: externalId, createdAt: 5, mode: 'external', label: 'remote' }
+    const bare: SubagentCatalogEntry = { id: SessionId('external-bare'), createdAt: 6, mode: 'external' }
+    expect(catalogEntries([entry, external, bare])).toEqual([
+      row,
+      { kind: 'diagnostic', id: externalId, reason: 'unsupported' },
+      { kind: 'diagnostic', id: SessionId('external-bare'), reason: 'unsupported' },
+    ])
+  })
+
   it('shows IDs, types, titles and statuses in a vertically scrolling picker', () => {
     const rows: SubagentRow[] = Array.from({ length: 8 }, (_, i) => ({
       ...row, id: SessionId(`child-${i + 1}`), label: `Task ${i + 1}`,

@@ -28,10 +28,11 @@ export type SubagentRow = SubagentEntry & {
 
 /**
  * Direct-child rows from the parent's durable catalog (`listChildren` returns raw catalog entries since
- * 0.1.7). An unknown mode becomes an `unsupported` diagnostic, as upstream's `listDescendants` maps it.
+ * 0.1.7). An unknown mode becomes an `unsupported` diagnostic, as upstream's `listDescendants` maps it; an
+ * `external` row (0.2: no local child session to open) is shown the same way.
  */
 export function catalogEntries(catalog: readonly SubagentCatalogEntry[]): SubagentEntry[] {
-  return catalog.map((entry): SubagentEntry => entry.mode === 'unknown'
+  return catalog.map((entry): SubagentEntry => entry.mode === 'unknown' || entry.mode === 'external'
     ? { kind: 'diagnostic', id: entry.id, reason: 'unsupported' }
     : { kind: 'child', id: entry.id, mode: entry.mode, ...entry.label === undefined ? {} : { label: entry.label } })
 }

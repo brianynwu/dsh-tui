@@ -1,0 +1,122 @@
+# Recorded dependency decisions, read by Foundry `tools/dep_audit.py` (procedure: Foundry
+# `olympus/skills/dep-reconcile.md`). One entry per finding; a decision holds until the finding's version or
+# advisory changes or `review_by` passes. This repo's lock is the dev/test install; runtime exposure is decided
+# in Foundry's `dep_decisions.toml`.
+schema = 1
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-2m5v-pch6-74hx"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-4qv8-2p9j-2685"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-4w7w-5xrc-9h26"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-55wc-3pg8-jfw6"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-9fm3-97px-rjf6"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-f72v-6w45-q472"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-qrxm-fqhp-jwvm"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "undici"
+version = "8.11.2"
+advisory = "GHSA-xjj6-f33q-929c"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer via dsh-subprocess > dsh-http-proxy): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"
+
+[[decision]]
+class = "npm"
+artifact = "package-lock.json"
+subject = "zod"
+version = "4.4.3"
+advisory = "GHSA-mrhx-c7xc-m3w5"
+status = "not_affected"
+justification = "vulnerable_code_cannot_be_controlled_by_adversary"
+impact_statement = "dev/test install only (dev peer of the dsh-* devDependencies): tsc, tsdown and vitest on fixtures, no network peer or attacker input; the shipped lib externalizes @deepseek-ai/*, so runtime exposure is the host tools/orch tree, decided in Foundry"
+review_by = 2027-02-03
+date = 2026-11-04
+record = "cycles/dep-bump-20261104-a9a2/exposure.md"

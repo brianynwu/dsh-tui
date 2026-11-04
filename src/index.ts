@@ -12,7 +12,6 @@ import {
   Text,
   TuiAltScreen,
   ProcessTerminal,
-  getKeybindings,
   visibleWidth,
   type Component,
   type SlashCommand,
@@ -162,7 +161,7 @@ import {
 } from './chat/model-command.ts'
 import { createQuestionQueue } from './chat/questions.ts'
 import { createResumeController } from './chat/resume.ts'
-import { buildTuiLayout, freeEditorHomeEnd } from './chat/layout.ts'
+import { buildTuiLayout } from './chat/layout.ts'
 import type { TuiRuntime } from './runtime.ts'
 import { WorkspaceFileSearch } from './chat/file-autocomplete.ts'
 import { TuiDashboardService } from './dashboard.ts'
@@ -331,9 +330,6 @@ export function createTuiChat(
     // follow-end (a mouse click; PageDown also re-reaches the end).
     scrollToEndIndicator: () => palette.dim('↓ jump to latest'),
   })
-  // Keep Home/End with the focused editor (the alt-screen viewport would
-  // otherwise steal them for scroll-to-top/bottom). See freeEditorHomeEnd.
-  freeEditorHomeEnd(getKeybindings())
   const chat = new Container()
   const viewSlot = new Container()
   viewSlot.addChild(chat)

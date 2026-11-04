@@ -11,21 +11,7 @@
  * whole `createTuiChat` closure (a Cordis Context + a running agent).
  * @module @deepseek-ai/dsh-tui/chat/layout
  */
-import { type Component, type KeybindingsManager, ScrollView, VStack } from '@earendil-works/pi-tui';
-/**
- * Free Home/End (and ctrl+home/ctrl+end/ctrl+a/ctrl+e) for the focused editor.
- *
- * `TuiAltScreen` registers its viewport input listener in its constructor, and
- * `TuiBase.handleTerminalInput` runs input listeners BEFORE the focused
- * component — so a viewport binding wins over the focused editor. The defaults
- * `tui.altScreen.top`/`tui.altScreen.bottom` are `home`/`end`, which collide with
- * the editor's `cursorLineStart`/`cursorLineEnd`. Unbind viewport top/bottom
- * (PageUp/PageDown + the wheel still scroll the transcript; repeated Page reaches
- * the ends). ctrl+home/ctrl+end are also editor-bound, so they are NOT a valid
- * replacement — unbinding is the only conflict-free fix. Merge-preserving: any
- * other user binding is retained.
- */
-export declare function freeEditorHomeEnd(keybindings: KeybindingsManager): void;
+import { type Component, ScrollView, VStack } from '@earendil-works/pi-tui';
 /** The components the front door assembles into the layout tree. */
 export interface TuiLayoutParts {
     /** Banner; scrolls with the transcript as the top of the flow content. */

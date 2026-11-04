@@ -1,7 +1,7 @@
 /**
  * Tests for the alt-screen layout adoption (pi-tui 0.85): the render-tree shape
  * (buildTuiLayout), the pinned-vs-scrolled flex contract, the primary ScrollView
- * follow-end/scroll behavior, and the Home/End keybinding fix (freeEditorHomeEnd).
+ * follow-end/scroll behavior, and pi-tui 1.5.0's Home/End keybinding split.
  *
  * The real viewport ALLOCATION (pinned entries keeping height under overflow) and
  * the terminal enter/exit path run in TuiAltScreen's layout engine, which is not
@@ -16,7 +16,7 @@ import {
   TUI_KEYBINDINGS,
   VStack,
 } from '@earendil-works/pi-tui'
-import { buildTuiLayout, freeEditorHomeEnd, type TuiLayoutParts } from '../src/chat/layout.ts'
+import { buildTuiLayout, type TuiLayoutParts } from '../src/chat/layout.ts'
 
 /** A minimal component that renders a fixed number of lines. */
 class Lines implements Component {
@@ -157,34 +157,26 @@ describe('primary ScrollView follow-end + scroll (B1)', () => {
   })
 })
 
-describe('freeEditorHomeEnd — Home/End belong to the editor (B3)', () => {
-  it('unbinds viewport top/bottom, preserves editor line-nav and other viewport keys', () => {
+describe('Home/End belong to the editor by default (pi-tui 1.5.0, B3)', () => {
+  it('binds viewport top/bottom to ctrl+home/ctrl+end and leaves home/end to the editor', () => {
     const kb = new KeybindingsManager(TUI_KEYBINDINGS)
 
-    // Before: the collision the fix targets.
-    expect(kb.getKeys('tui.altScreen.top')).toContain('home')
-    expect(kb.getKeys('tui.altScreen.bottom')).toContain('end')
-
-    freeEditorHomeEnd(kb)
-
-    // Viewport top/bottom are unbound…
-    expect(kb.getKeys('tui.altScreen.top')).toEqual([])
-    expect(kb.getKeys('tui.altScreen.bottom')).toEqual([])
+    // Viewport top/bottom take the ctrl chords, not bare Home/End…
+    expect(kb.getKeys('tui.altScreen.top')).toEqual(['ctrl+home'])
+    expect(kb.getKeys('tui.altScreen.bottom')).toEqual(['ctrl+end'])
     // …so Home/End reach the focused editor's line-start/line-end.
-    expect(kb.getKeys('tui.editor.cursorLineStart')).toContain('home')
-    expect(kb.getKeys('tui.editor.cursorLineEnd')).toContain('end')
-    // Transcript scrolling still has a keyboard path.
+    expect(kb.getKeys('tui.editor.cursorLineStart')).toEqual(['home', 'ctrl+a'])
+    expect(kb.getKeys('tui.editor.cursorLineEnd')).toEqual(['end', 'ctrl+e'])
+    // No other action claims the viewport chords (the editor no longer binds them).
+    const actions = Object.keys(TUI_KEYBINDINGS) as (keyof typeof TUI_KEYBINDINGS)[]
+    const holders = (key: string) => actions.filter(action => kb.getKeys(action).includes(key))
+    expect(holders('ctrl+home')).toEqual(['tui.altScreen.top'])
+    expect(holders('ctrl+end')).toEqual(['tui.altScreen.bottom'])
+    expect(holders('home')).toEqual(['tui.editor.cursorLineStart'])
+    expect(holders('end')).toEqual(['tui.editor.cursorLineEnd'])
+    // Transcript scrolling keeps its Page keys and search.
     expect(kb.getKeys('tui.altScreen.pageUp')).toContain('pageUp')
     expect(kb.getKeys('tui.altScreen.pageDown')).toContain('pageDown')
-    // Unrelated viewport bindings survive the merge.
     expect(kb.getKeys('tui.altScreen.search')).toContain('ctrl+shift+f')
-  })
-
-  it('is merge-preserving: an existing user binding is retained', () => {
-    const kb = new KeybindingsManager(TUI_KEYBINDINGS)
-    kb.setUserBindings({ 'tui.altScreen.search': 'ctrl+s' })
-    freeEditorHomeEnd(kb)
-    expect(kb.getKeys('tui.altScreen.search')).toContain('ctrl+s')
-    expect(kb.getKeys('tui.altScreen.top')).toEqual([])
   })
 })

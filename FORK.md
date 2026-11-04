@@ -14,6 +14,30 @@ session continues). This fork keeps the original's dsh-core-native **in-place** 
 (`src/chat/model-command.ts`: mutates `target.current`, "New steps will use it", no fork/reseed) and is an
 **in-process cordis `--profile` bundle** — so it composes with a launcher's `--patch` overlays natively.
 
+## dsh 0.2.1-rc.5 line, pi-tui 1.5.0 (2026-11-04)
+
+Peers move to the 0.2.1-rc.5 lockstep: every `@deepseek-ai/dsh*` peer, devDep and `overrides` value is exact
+`0.2.1-rc.5`; the vendor peers take upstream's tilde ranges (`cordis ~4.0.5`, `cordis-plugin-loader ~1.0.6`,
+`schemastery ~3.18.5`), exact in devDeps and `overrides`. `@earendil-works/pi-tui` 0.86.1 → 1.5.0 and `marked`
+18.0.5 → 18.0.11 (pi-tui's own pin; tsdown keeps `marked` external, so the bundle would otherwise run pi-tui against
+the older copy). The lock is a fresh resolve. Changes, each proven by `tsc` + tests:
+- **The invariant companion is gone.** dsh 0.2 drops `@deepseek-ai/dsh-invariants`; the type-only no-op companion
+  (`src/invariant.ts`, the `./invariant` export, its tsdown entry, `lib/invariant.js`, `lib/types/invariant.d.ts{,.map}`)
+  and the peer are removed. tsdown now emits three entries.
+- **`external` catalog rows** (`SubagentCatalogEntry` v2: an external execution with no local child session):
+  `catalogEntries` maps them to the existing `unsupported` diagnostic row, as it does an unknown mode.
+- **Home/End are the editor's upstream.** pi-tui 1.5.0 binds `tui.altScreen.top`/`bottom` to `ctrl+home`/`ctrl+end`
+  and the editor no longer binds those chords, so the B3 collision is gone; `freeEditorHomeEnd` and its call are
+  deleted (keeping it would leave viewport top/bottom bound to nothing). `test/layout.test.ts` pins upstream's split.
+- pi-tui 1.5.0 adds `marked-cjk-friendly` (bundled with pi-tui). The SGR reset after `preserveScreen` stays (pi-tui
+  still skips it). `ProcessTerminal` now also queries OSC 7501 unless `PI_PROGRAM_STATUS` is set; left at default.
+- **`dep_decisions.toml`** records the lock's nine advisory rows (undici 8.11.2, zod 4.4.3, pinned exactly inside
+  dsh) as `not_affected` for this dev/test install; runtime exposure is the host's tree, decided in Foundry
+  (record: `cycles/dep-bump-20261104-a9a2/exposure.md`).
+
+`lib/` rebuilds byte-identically (`npm ci && npm run build`); `sha256(lib/index.js)` = `33ec7d8c…`. vitest
+164/164.
+
 ## dsh 0.1.7-rc.2 line (2026-09-24)
 
 Peers move to the 0.1.7-rc.2 lockstep: every `@deepseek-ai/dsh*` peer is exact `0.1.7-rc.2` (dsh's startup
@@ -48,7 +72,8 @@ Adopts the 0.85 capabilities the pinned pi-tui 0.85.1 exposes (previously bumped
   scroll region is the only grow+shrink entry; pinned entries are `shrink:0` so a long transcript can never
   clip the editor/prompt/modal. `chat` stays transcript-only (todo/compaction are separate `scrollBody`
   siblings), so its in-place `children` mutations keep their index meaning.
-- **Home/End belong to the editor** (`freeEditorHomeEnd`): `TuiAltScreen` registers its viewport input
+- **Home/End belong to the editor** (`freeEditorHomeEnd`; superseded by pi-tui 1.5.0's own split and
+  deleted on the dsh 0.2.1-rc.5 line): `TuiAltScreen` registers its viewport input
   listener in its ctor, and `TuiBase.handleTerminalInput` runs listeners before the focused component — so the
   default `tui.altScreen.top`/`bottom` (= `home`/`end`) would steal the editor's line-start/line-end. They are
   unbound (merge-preserving); PageUp/PageDown/wheel still scroll. ctrl+home/ctrl+end are also editor-bound, so
